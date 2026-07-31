@@ -29,13 +29,46 @@ const router = createRouter({
             name: "register",
             component: () => import ('../views/RegisterPage.vue'),
         },
+        {
+            path: "/forgot-password",
+            name: "forgot-password",
+            component: () => import ('../views/ForgotPasswordPage.vue'),
+        },
+        {
+            path: "/reset-password",
+            name: "reset-password",
+            component: () => import ('../views/ResetPasswordPage.vue'),
+        },
+        {
+            path: "/profile",
+            name: "profile",
+            meta: { requiresAuth: true },
+            component: () => import ('../views/ProfilePage.vue'),
+        },
+        {
+            path: "/notifications",
+            name: "notifications",
+            meta: { requiresAuth: true },
+            component: () => import ('../views/NotificationsPage.vue'),
+        },
+        {
+            path: "/admin",
+            name: "admin",
+            meta: { requiresAuth: true, requiresAdmin: true },
+            component: () => import ('../views/AdminPage.vue'),
+        },
     ],
 })
 
-// Navigation guard: redirect logged-in users away from auth pages
+// Navigation guard
 router.beforeEach((to, from, next) => {
-    const { isLoggedIn } = useAuth()
+    const { isLoggedIn, user } = useAuth()
     if ((to.path === '/login' || to.path === '/register') && isLoggedIn.value) {
+        next('/')
+    } else if (to.meta.requiresAuth && !isLoggedIn.value) {
+        next('/login')
+    } else if (to.meta.requiresAdmin && !user.value?.is_admin) {
+        // 非管理员不可见：重定向首页，不暴露管理界面
         next('/')
     } else {
         next()

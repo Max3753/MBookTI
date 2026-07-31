@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getBookDetail, getBookComments, createComment, toggleCommentLike } from '../api'
+import { getBookDetail, getBookComments, createComment, toggleCommentLike, toggleFavorite } from '../api'
 import apiConfig from '../api/config'
 import { t } from '../composables/useI18n'
 import { useAuth } from '../composables/useAuth'
@@ -13,6 +13,26 @@ const bookId = Number(route.params.id)
 const book = ref<any>(null)
 const loading = ref(true)
 const error = ref('')
+
+// 收藏
+const favoriting = ref(false)
+
+async function toggleFav() {
+    if (!isLoggedIn.value) {
+        router.push('/login')
+        return
+    }
+    if (favoriting.value) return
+    favoriting.value = true
+    try {
+        const res = await toggleFavorite(bookId)
+        book.value.is_favorited = res.data.is_favorited
+    } catch {
+        // silently fail
+    } finally {
+        favoriting.value = false
+    }
+}
 
 // 评论
 const comments = ref<any[]>([])
@@ -151,7 +171,22 @@ async function toggleLike(comment: any) {
                 </div>
                 <!-- 基本信息 -->
                 <div class="flex-1 min-w-0">
-                    <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">{{ book.title }}</h1>
+                    <div class="flex items-start justify-between gap-3">
+                        <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">{{ book.title }}</h1>
+                        <button
+                            @click="toggleFav"
+                            :disabled="favoriting"
+                            class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium transition-all duration-200 cursor-pointer shrink-0 disabled:opacity-50"
+                            :class="book.is_favorited
+                                ? 'bg-red-50 dark:bg-red-900/30 text-red-500 dark:text-red-400'
+                                : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'"
+                        >
+                            <svg class="w-4 h-4" :fill="book.is_favorited ? 'currentColor' : 'none'" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+                            </svg>
+                            {{ book.is_favorited ? '已收藏' : '收藏' }}
+                        </button>
+                    </div>
                     <p class="mt-1 text-gray-500 dark:text-gray-400">{{ book.author }}</p>
                     <span v-if="book.genre" class="mt-3 inline-block px-2.5 py-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-xs rounded-full font-medium">
                         {{ book.genre }}

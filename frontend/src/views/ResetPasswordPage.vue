@@ -1,30 +1,38 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useAuth } from '../composables/useAuth'
+import { resetPassword } from '../api'
 
 const route = useRoute()
 const router = useRouter()
-const { login } = useAuth()
 
-const username = ref('')
-const password = ref('')
+// 从 query 自动读取 token 预填（可修改）
+const token = ref((typeof route.query.token === 'string' ? route.query.token : '') || '')
+const newPassword = ref('')
+const confirmPassword = ref('')
 const loading = ref(false)
 const error = ref('')
-const success = ref(route.query.success === '1')
 
-async function handleLogin() {
-    if (!username.value || !password.value) {
+async function handleReset() {
+    if (!token.value.trim()) {
+        error.value = '缺少重置 token'
+        return
+    }
+    if (!newPassword.value || !confirmPassword.value) {
         error.value = '请填写所有字段'
+        return
+    }
+    if (newPassword.value !== confirmPassword.value) {
+        error.value = '两次输入的密码不一致'
         return
     }
     loading.value = true
     error.value = ''
     try {
-        await login(username.value, password.value)
-        router.push('/')
+        await resetPassword(token.value.trim(), newPassword.value)
+        router.push('/login?success=1')
     } catch (e: any) {
-        error.value = e.response?.data?.detail || e.message || '登录失败'
+        error.value = e.response?.data?.detail || e.message || '重置失败'
     } finally {
         loading.value = false
     }
@@ -35,53 +43,57 @@ async function handleLogin() {
     <div class="flex items-center justify-center min-h-[60vh]">
         <div class="w-full max-w-md">
           <button
-            @click="$router.push('/')"
+            @click="$router.push('/login')"
             class="mb-3 flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors duration-200 cursor-pointer"
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
             </svg>
-            返回
+            返回登录
           </button>
           <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-8">
-            <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6 text-center">登录</h1>
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6 text-center">重置密码</h1>
 
-            <form @submit.prevent="handleLogin" class="space-y-5">
-                <!-- 成功提示（密码重置完成跳转回来） -->
-                <div v-if="success" class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 text-sm rounded-lg px-4 py-3">
-                    密码重置成功，请使用新密码登录
-                </div>
-
+            <form @submit.prevent="handleReset" class="space-y-5">
                 <!-- 错误提示 -->
                 <div v-if="error" class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm rounded-lg px-4 py-3">
                     {{ error }}
                 </div>
 
-                <!-- 用户名 -->
+                <!-- 重置 token -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">用户名</label>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">重置 token</label>
                     <input
-                        v-model="username"
+                        v-model="token"
                         type="text"
-                        placeholder="请输入用户名"
+                        placeholder="请输入邮件中的重置 token"
                         class="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2.5 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all duration-200"
-                        autocomplete="username"
+                        autocomplete="off"
                     />
                 </div>
 
-                <!-- 密码 -->
+                <!-- 新密码 -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">密码</label>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">新密码</label>
                     <input
-                        v-model="password"
+                        v-model="newPassword"
                         type="password"
-                        placeholder="请输入密码"
+                        placeholder="请输入新密码"
                         class="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2.5 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all duration-200"
-                        autocomplete="current-password"
+                        autocomplete="new-password"
                     />
-                    <div class="mt-1.5 text-right">
-                        <router-link to="/forgot-password" class="text-indigo-600 dark:text-indigo-400 hover:underline font-medium text-sm">忘记密码？</router-link>
-                    </div>
+                </div>
+
+                <!-- 确认密码 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">确认密码</label>
+                    <input
+                        v-model="confirmPassword"
+                        type="password"
+                        placeholder="请再次输入新密码"
+                        class="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2.5 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all duration-200"
+                        autocomplete="new-password"
+                    />
                 </div>
 
                 <!-- 提交按钮 -->
@@ -91,13 +103,13 @@ async function handleLogin() {
                     class="w-full bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400 text-white rounded-lg px-6 py-2.5 font-medium transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                     <div v-if="loading" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    {{ loading ? '登录中...' : '登录' }}
+                    {{ loading ? '重置中...' : '重置密码' }}
                 </button>
 
-                <!-- 注册链接 -->
+                <!-- 登录链接 -->
                 <p class="text-center text-sm text-gray-500 dark:text-gray-400">
-                    还没有账号？
-                    <router-link to="/register" class="text-indigo-600 dark:text-indigo-400 hover:underline font-medium">注册</router-link>
+                    想起来了？
+                    <router-link to="/login" class="text-indigo-600 dark:text-indigo-400 hover:underline font-medium">返回登录</router-link>
                 </p>
             </form>
         </div>
