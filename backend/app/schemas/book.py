@@ -14,3 +14,22 @@ class BookResponse(BaseModel):
     created_at: datetime
     
     model_config = {"from_attributes": True}
+
+
+class RecommendedTypeInfo(BaseModel):
+    code: str
+    name: str
+
+
+class BookDetailResponse(BaseModel):
+    id: int
+    title: str
+    author: str
+    cover_url: Optional[str] = None
+    description: Optional[str] = None
+    genre: Optional[str] = None
+    recommended_types: list[RecommendedTypeInfo] = []
+    comment_count: int = 0
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

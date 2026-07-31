@@ -22,7 +22,7 @@ async def create_comment(
 ):
     comment = Comment(
         user_id=current_user.id,
-        recommendation_id=req.recommendation_id,
+        book_id=req.book_id,
         content=req.content,
         parent_id=req.parent_id,
     )
@@ -34,7 +34,7 @@ async def create_comment(
         id=comment.id,
         user_id=comment.user_id,
         username=current_user.username,
-        recommendation_id=comment.recommendation_id,
+        book_id=comment.book_id,
         parent_id=comment.parent_id,
         content=comment.content,
         likes_count=comment.likes_count,
@@ -44,12 +44,12 @@ async def create_comment(
     return ApiResponse(data=resp)
 
 
-@router.get("/recommendation/{rec_id}", response_model=ApiListResponse[CommentResponse])
-async def list_comments(rec_id: int, session: AsyncSession = Depends(get_db)):
+@router.get("/book/{book_id}", response_model=ApiListResponse[CommentResponse])
+async def list_book_comments(book_id: int, session: AsyncSession = Depends(get_db)):
     result = await session.execute(
         select(Comment, User)
         .join(User, Comment.user_id == User.id)
-        .where(Comment.recommendation_id == rec_id, Comment.is_hidden == False)
+        .where(Comment.book_id == book_id, Comment.is_hidden == False)
         .order_by(Comment.created_at.asc())
     )
     rows = result.all()
@@ -60,7 +60,7 @@ async def list_comments(rec_id: int, session: AsyncSession = Depends(get_db)):
             id=c.id,
             user_id=c.user_id,
             username=u.username,
-            recommendation_id=c.recommendation_id,
+            book_id=c.book_id,
             parent_id=c.parent_id,
             content=c.content,
             likes_count=c.likes_count,

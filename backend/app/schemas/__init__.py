@@ -1,6 +1,6 @@
 from app.schemas.common import ApiResponse, ApiListResponse, ErrorResponse
 from app.schemas.mbti_type import MbtiTypeResponse
-from app.schemas.book import BookResponse
+from app.schemas.book import BookResponse, BookDetailResponse, RecommendedTypeInfo
 from app.schemas.recommendation import RecommendationResponse, AIGenerateRequest, AIGenerateBook
 from app.schemas.user import UserResponse, TokenResponse, UserRegisterRequest, UserLoginRequest
 from app.schemas.comment import CommentResponse, CommentCreateRequest
@@ -11,6 +11,8 @@ __all__ = [
     "ErrorResponse",
     "MbtiTypeResponse",
     "BookResponse",
+    "BookDetailResponse",
+    "RecommendedTypeInfo",
     "RecommendationResponse",
     "AIGenerateRequest",
     "AIGenerateBook",

@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 
 class CommentCreateRequest(BaseModel):
-    recommendation_id: int
+    book_id: int
     content: str
     parent_id: Optional[int] = None
 
@@ -13,7 +13,7 @@ class CommentResponse(BaseModel):
     id: int
     user_id: int
     username: str
-    recommendation_id: int
+    book_id: int
     parent_id: Optional[int] = None
     content: str
     likes_count: int
