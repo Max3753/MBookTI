@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     deepseek_api_url: str = "https://api.deepseek.com/v1"
     deepseek_model: str = "deepseek-chat"
     
+    # JWT 配置
+    jwt_secret_key: str = os.getenv("JWT_SECRET_KEY", "dev-secret-key-change-in-production")
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 60 * 24 * 7  # 7天
+
     # 日志配置
     log_level: str = "INFO"
     
