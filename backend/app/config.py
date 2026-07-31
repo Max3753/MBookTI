@@ -69,7 +69,13 @@ class Settings(BaseSettings):
         return self
         
     def get_cors_origins_list(self) -> List[str]:
-        """获取CORS允许的源列表"""
+        """获取CORS允许的源列表。
+
+        开发模式（debug=True）放行任意来源（含局域网/移动设备访问）；
+        生产模式（debug=False）仅允许白名单内的来源。
+        """
+        if self.debug:
+            return ["*"]
         return [origin.strip() for origin in self.cors_origins.split(",")]
 
 settings = Settings()

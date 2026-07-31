@@ -65,3 +65,11 @@ app.include_router(notifications.router)
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+if __name__ == "__main__":
+    # 直接运行（python -m app.main）时监听所有网卡，支持局域网/移动设备访问。
+    # 若用 `uvicorn app.main:app` 启动，需手动加 --host 0.0.0.0 才能被局域网访问。
+    import uvicorn
+
+    uvicorn.run("app.main:app", host="0.0.0.0", port=5000, reload=True)
