@@ -7,12 +7,15 @@ from app.database import AsyncSessionLocal
 from app.seed.mbti_types import init_mbti_types
 from app.core.exceptions import global_exception_handler, http_exception_handler, sqlalchemy_exception_handler
 
-from app.routers import mbti_types, recommendations, books
+from app.routers import mbti_types, recommendations, books, auth, comments, proxy
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async with AsyncSessionLocal() as session:
-        await init_mbti_types(session)
+    try:
+        async with AsyncSessionLocal() as session:
+            await init_mbti_types(session)
+    except Exception as e:
+        print(f"[启动警告] 数据库连接失败，跳过初始化: {e}")
     yield
     
 
@@ -39,6 +42,9 @@ app.add_middleware(
 app.include_router(mbti_types.router)
 app.include_router(recommendations.router)
 app.include_router(books.router)
+app.include_router(auth.router)
+app.include_router(comments.router)
+app.include_router(proxy.router)
 
 @app.get("/health")
 async def health():
