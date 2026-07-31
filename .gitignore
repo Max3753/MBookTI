@@ -29,3 +29,6 @@ build/
 
 # Playwright MCP 临时目录
 .playwright-mcp/
+
+# Docker 部署指南（本地文档，不入库）
+Docker部署指南.md
