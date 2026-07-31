@@ -14,6 +14,12 @@ const t: Record<string, string> = {
     generate_failed: '生成失败，请稍后重试',
     no_recommend: '暂无推荐',
     no_recommend_desc: '点击上方按钮，让 AI 为你生成推荐书单',
+    comments_title: '评论',
+    comments_empty: '暂无评论，来说点什么吧',
+    comments_login: '登录后可评论',
+    comments_placeholder: '写下你的想法...',
+    comments_submit: '发表评论',
+    comments_submitting: '提交中...',
 }
 
 export { t }
