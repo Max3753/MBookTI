@@ -3,8 +3,9 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Book, Recommendation, MbtiType, Comment
+from app.models import Book, Recommendation, MbtiType, Comment, User, UserBookFavorite
 from app.schemas import ApiResponse, BookResponse, BookDetailResponse, RecommendedTypeInfo
+from app.auth.deps import get_current_user_optional
 
 router = APIRouter(
     prefix="/api/v1/books",
@@ -21,7 +22,11 @@ async def get_book(book_id: int, session: AsyncSession = Depends(get_db)):
 
 
 @router.get("/{book_id}/detail", response_model=ApiResponse[BookDetailResponse])
-async def get_book_detail(book_id: int, session: AsyncSession = Depends(get_db)):
+async def get_book_detail(
+    book_id: int,
+    session: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
+):
     result = await session.execute(select(Book).where(Book.id == book_id))
     book = result.scalar_one_or_none()
     if not book:
@@ -41,6 +46,17 @@ async def get_book_detail(book_id: int, session: AsyncSession = Depends(get_db))
         select(func.count()).select_from(Comment).where(Comment.book_id == book_id)
     )).scalar()
 
+    # 当前用户是否收藏
+    is_favorited = False
+    if current_user is not None:
+        fav = (await session.execute(
+            select(UserBookFavorite).where(
+                UserBookFavorite.user_id == current_user.id,
+                UserBookFavorite.book_id == book_id,
+            )
+        )).scalar_one_or_none()
+        is_favorited = fav is not None
+
     detail = BookDetailResponse(
         id=book.id,
         title=book.title,
@@ -50,6 +66,7 @@ async def get_book_detail(book_id: int, session: AsyncSession = Depends(get_db))
         genre=book.genre,
         recommended_types=recommended_types,
         comment_count=comment_count,
+        is_favorited=is_favorited,
         created_at=book.created_at,
     )
     return ApiResponse(data=detail)

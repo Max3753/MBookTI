@@ -30,6 +30,7 @@ class BookDetailResponse(BaseModel):
     genre: Optional[str] = None
     recommended_types: list[RecommendedTypeInfo] = []
     comment_count: int = 0
+    is_favorited: bool = False
     created_at: datetime
 
     model_config = {"from_attributes": True}

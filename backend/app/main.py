@@ -7,7 +7,7 @@ from app.database import AsyncSessionLocal
 from app.seed.mbti_types import init_mbti_types
 from app.core.exceptions import global_exception_handler, http_exception_handler, sqlalchemy_exception_handler
 
-from app.routers import mbti_types, recommendations, books, auth, comments, proxy
+from app.routers import mbti_types, recommendations, books, auth, comments, proxy, users, announcements, notifications
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -24,7 +24,20 @@ app = FastAPI(
     version=settings.app_version,
     description=settings.app_description,
     lifespan=lifespan,
+    # 非调试模式（生产）关闭 API 文档暴露
+    docs_url="/docs" if settings.debug else None,
+    redoc_url="/redoc" if settings.debug else None,
+    openapi_url="/openapi.json" if settings.debug else None,
 )
+
+# 安全响应头
+@app.middleware("http")
+async def security_headers_middleware(request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    return response
 
 # 注册全局异常处理器
 app.add_exception_handler(Exception, global_exception_handler)
@@ -45,6 +58,9 @@ app.include_router(books.router)
 app.include_router(auth.router)
 app.include_router(comments.router)
 app.include_router(proxy.router)
+app.include_router(users.router)
+app.include_router(announcements.router)
+app.include_router(notifications.router)
 
 @app.get("/health")
 async def health():

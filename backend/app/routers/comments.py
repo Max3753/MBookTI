@@ -3,7 +3,7 @@ from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Comment, CommentLike, User
+from app.models import Comment, CommentLike, Notification, User
 from app.schemas import ApiResponse, ApiListResponse
 from app.schemas.comment import CommentCreateRequest, CommentResponse
 from app.auth.deps import get_current_user
@@ -98,5 +98,42 @@ async def toggle_like(
     else:
         session.add(CommentLike(user_id=current_user.id, comment_id=comment_id))
         comment.likes_count += 1
+        # 获赞通知：非自己赞自己时，给被赞者发通知（含跳转书籍信息）
+        # 同一用户对同一评论的赞只通知一次（取消再赞不重复）
+        if comment.user_id != current_user.id:
+            dup = await session.execute(
+                select(Notification).where(
+                    Notification.user_id == comment.user_id,
+                    Notification.type == 1,
+                    Notification.related_comment_id == comment.id,
+                )
+            )
+            if dup.scalar_one_or_none() is None:
+                session.add(Notification(
+                    user_id=comment.user_id,
+                    type=1,  # 评论获赞
+                    content=f"你的书评被 {current_user.username} 赞了",
+                    related_book_id=comment.book_id,
+                    related_comment_id=comment.id,
+                ))
         await session.commit()
         return ApiResponse(data={"liked": True, "likes_count": comment.likes_count})
+
+
+@router.delete("/{comment_id}", response_model=ApiResponse)
+async def delete_comment(
+    comment_id: int,
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """删除自己的书评（硬删，同时清理点赞记录）"""
+    comment = await session.get(Comment, comment_id)
+    if not comment:
+        raise HTTPException(status_code=404, detail="评论不存在")
+    if comment.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="无权删除他人评论")
+
+    await session.execute(delete(CommentLike).where(CommentLike.comment_id == comment_id))
+    await session.delete(comment)
+    await session.commit()
+    return ApiResponse(data=None, message="评论已删除")

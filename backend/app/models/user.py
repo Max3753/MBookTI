@@ -2,6 +2,7 @@
 from sqlalchemy import Boolean, ForeignKey, Integer, SmallInteger, String, Text, JSON, DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column
 from datetime import datetime
+from typing import Optional
 from app.models.base import Base
 
 class User(Base):
@@ -14,4 +15,6 @@ class User(Base):
     avatar_url: Mapped[str] = mapped_column(Text, nullable=True)
     mbti_type_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("mbti_types.id") ,nullable=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    # 最近一次密码修改时间：非空时要求访问 token 的签发时间(iat)不早于它，用于改密后使旧 token 立即失效
+    password_changed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
