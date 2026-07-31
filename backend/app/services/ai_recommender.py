@@ -60,14 +60,37 @@ class AIRecommender:
   ]
 }}
 """
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"},
-            temperature=0.7,
-        )
-        
+        # 1) AI 调用失败不再裸奔，包一层明确报错
+        try:
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+                temperature=0.7,
+            )
+        except Exception as e:
+            raise RuntimeError(f"AI 服务调用失败: {e}")
+
         import json
-        content = response.choices[0].message.content
-        return json.loads(content).get("books", [])
+        import re
+
+        content = response.choices[0].message.content or ""
+
+        # 2) 剥掉 AI 可能包裹的 markdown 代码块/前后缀，只取第一个 JSON 对象
+        m = re.search(r"\{.*\}", content, re.S)
+        if not m:
+            raise RuntimeError("AI 返回内容中没有 JSON")
+
+        try:
+            data = json.loads(m.group(0))
+        except json.JSONDecodeError as e:
+            raise RuntimeError(f"AI 返回的 JSON 解析失败: {e}")
+
+        # 3) 字段完整性校验，缺字段的书直接丢弃（不再 KeyError 炸接口）
+        required = {"title", "author", "description", "reasoning", "genre"}
+        books = [
+            b for b in (data.get("books") or [])
+            if isinstance(b, dict) and required.issubset(b.keys())
+        ]
+        return books
 
