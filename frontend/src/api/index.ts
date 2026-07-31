@@ -28,4 +28,26 @@ export async function aiGenerate(mbtiCode: string, count = 5) {
     return res.data
 }
 
+// 书籍详情接口
+export async function getBookDetail(bookId: number) {
+    const res = await api.get(`/books/${bookId}/detail`)
+    return res.data
+}
+
+// 书评接口（挂书）
+export async function getBookComments(bookId: number) {
+    const res = await api.get(`/comments/book/${bookId}`)
+    return res.data
+}
+
+export async function createComment(payload: { book_id: number; content: string; parent_id?: number | null }) {
+    const res = await api.post('/comments', payload)
+    return res.data
+}
+
+export async function toggleCommentLike(commentId: number) {
+    const res = await api.post(`/comments/${commentId}/like`)
+    return res.data
+}
+
 export default api
