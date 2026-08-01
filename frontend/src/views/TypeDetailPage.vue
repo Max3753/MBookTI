@@ -4,9 +4,11 @@ import { useRoute } from 'vue-router'
 import { getMbtiType, getRecommendations, aiGenerate } from '../api'
 import apiConfig from '../api/config'
 import { t } from '../composables/useI18n'
+import { useAuth } from '../composables/useAuth'
 
 const route = useRoute()
 const code = route.params.code as string
+const { isLoggedIn } = useAuth()
 
 const mbtiType = ref<any>(null)
 const recommendations = ref<any[]>([])
@@ -31,11 +33,18 @@ onMounted(async () => {
 })
 
 async function handleGenerate() {
+    if (!isLoggedIn.value) {
+        window.location.href = '/login'
+        return
+    }
     generating.value = true
     error.value = ''
     try {
-        const res = await aiGenerate(code)
-        recommendations.value = res.data || []
+        // AI 生成（后端入库）；生成成功后重新拉取完整推荐列表，
+        // 保证数据形状与 getRecommendations 一致（含 book.id/cover_url 等）
+        await aiGenerate(code)
+        const recRes = await getRecommendations(code)
+        recommendations.value = recRes.data?.items || []
     } catch (e: any) {
         error.value = e.response?.data?.detail || t.generate_failed
     } finally {

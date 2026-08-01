@@ -77,7 +77,8 @@ onMounted(async () => {
             getBookComments(bookId),
         ])
         book.value = bookRes.data
-        comments.value = commentRes.data?.data || []
+        // getBookComments 返回 {data: [...], total, message}，commentRes.data 即评论数组
+        comments.value = commentRes.data || []
     } catch (e) {
         error.value = t.load_failed
     } finally {
@@ -105,8 +106,9 @@ async function toggleLike(comment: any) {
     likingId.value = comment.id
     try {
         const res = await toggleCommentLike(comment.id)
-        comment.liked = res.data.data.liked
-        comment.likes_count = res.data.data.likes_count
+        // toggleCommentLike 返回 {data: {liked, likes_count}, message}
+        comment.liked = res.data.liked
+        comment.likes_count = res.data.likes_count
     } catch {
         // silently fail
     } finally {

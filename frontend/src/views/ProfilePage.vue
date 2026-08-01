@@ -14,7 +14,9 @@ import { useAuth } from '../composables/useAuth'
 import { getMbtiTypes } from '../api'
 
 const router = useRouter()
-const { user, logout } = useAuth()
+const { logout } = useAuth()
+
+const reloadPage = () => window.location.reload()
 
 const profile = ref<any>(null)
 const loading = ref(true)
@@ -218,7 +220,7 @@ onMounted(async () => {
         <!-- 加载失败 -->
         <div v-else-if="error" class="text-center py-20">
             <p class="text-gray-400 mb-3">{{ error }}</p>
-            <button @click="location.reload()" class="text-sm text-indigo-600 hover:underline cursor-pointer">重试</button>
+            <button @click="reloadPage" class="text-sm text-indigo-600 hover:underline cursor-pointer">重试</button>
         </div>
 
         <div v-else-if="profile" class="space-y-6">

@@ -11,6 +11,8 @@ const types = ref<any[]>([]);
 const loading = ref(true);
 const loadError = ref(false);
 
+const reloadPage = () => window.location.reload()
+
 // 系统公告弹窗
 const announcements = ref<any[]>([])
 const announcementIndex = ref(0)
@@ -100,7 +102,7 @@ function getImage(code: string): string {
         <div v-else-if="loadError" class="text-center py-20">
             <div class="text-5xl mb-4">😵</div>
             <p class="text-gray-400 mb-3">{{ t.load_failed }}</p>
-            <button @click="location.reload()" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer">
+            <button @click="reloadPage" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer">
                 {{ t.retry }}
             </button>
         </div>

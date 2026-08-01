@@ -61,7 +61,7 @@ const router = createRouter({
 })
 
 // Navigation guard
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, _from, next) => {
     const { isLoggedIn, user } = useAuth()
     if ((to.path === '/login' || to.path === '/register') && isLoggedIn.value) {
         next('/')
