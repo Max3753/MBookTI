@@ -2,6 +2,8 @@
 .env
 .env.local
 .env.*.local
+# Docker 部署环境变量（含真实密钥，不入库）
+.env.docker
 
 # IDE
 .vscode/

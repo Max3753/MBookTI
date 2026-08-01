@@ -1,0 +1,8 @@
+# 构建上下文排除：避免 __pycache__、本地 .env（含密钥）进镜像
+__pycache__
+*.pyc
+.env
+.venv
+venv
+.git
+*.log

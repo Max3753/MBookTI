@@ -1,0 +1,7 @@
+# 构建上下文排除：避免将宿主机（Windows）的 node_modules/dist
+# 复制进 Linux 构建镜像，覆盖 npm ci 产出的 Linux 平台二进制
+node_modules
+dist
+.git
+*.log
+.DS_Store
