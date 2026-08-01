@@ -30,11 +30,12 @@ def _normalize_book(s: str) -> str:
     return re.sub(r"[\s《》·\-—:：,，.。\"'“”]+", "", s or "")
 
 
-async def _delete_existing_recommendations(session: AsyncSession, mbti_type_id: int) -> None:
-    """删除某 MBTI 类型已有的推荐记录。
+async def _delete_existing_recommendations(session: AsyncSession, mbti_type_id: int) -> list[int]:
+    """删除某 MBTI 类型已有的推荐记录，返回被删除推荐所关联的书籍 id 列表。
 
     只删除 recommendations 关系，不碰书籍/评论/收藏；
     评论对该类型旧推荐的外键引用先置空，评论本身保留。
+    返回的 book_id 列表用于「换书分支」排除，避免换到刚展示过的书。
     """
     old_recs = (
         await session.execute(
@@ -42,7 +43,8 @@ async def _delete_existing_recommendations(session: AsyncSession, mbti_type_id: 
         )
     ).scalars().all()
     if not old_recs:
-        return
+        return []
+    old_book_ids = [r.book_id for r in old_recs]
     rec_ids = [r.id for r in old_recs]
     await session.execute(
         update(Comment)
@@ -53,6 +55,7 @@ async def _delete_existing_recommendations(session: AsyncSession, mbti_type_id: 
         delete(Recommendation).where(Recommendation.id.in_(rec_ids))
     )
     await session.flush()
+    return old_book_ids
 
 
 async def _generate_with_ai(
@@ -119,10 +122,12 @@ async def _rotate_from_library(
     session: AsyncSession,
     count: int,
     mbti_type_id: int,
+    exclude_book_ids: list[int] | None = None,
 ) -> list[dict]:
     """从数据库已有书籍中随机换一批「该类型未推荐过」的书。
 
     零 AI 费用、零新增书籍；只替换推荐关系。
+    exclude_book_ids：刚被删除的旧推荐书籍 id，换书时排除，避免换到刚展示过的书。
     """
     # 已推荐给该类型的书籍 id（避免重复展示）
     recommended_book_ids = (
@@ -131,9 +136,12 @@ async def _rotate_from_library(
         )
     ).scalars().all()
 
+    # 合并排除：当前已推荐的 + 刚删除的旧推荐（防止换回刚看过的）
+    exclude = set(recommended_book_ids) | set(exclude_book_ids or [])
+
     query = select(Book)
-    if recommended_book_ids:
-        query = query.where(Book.id.not_in(recommended_book_ids))
+    if exclude:
+        query = query.where(Book.id.not_in(list(exclude)))
     all_books = (await session.execute(query)).scalars().all()
 
     import random
@@ -185,8 +193,10 @@ async def ai_generate(
         saved = await _generate_with_ai(session, request.mbti_code, request.count, mbti_type.id)
         message = "AI 推荐重新生成成功" if has_existing else "AI 推荐生成成功"
     else:
-        await _delete_existing_recommendations(session, mbti_type.id)
-        saved = await _rotate_from_library(session, request.count, mbti_type.id)
+        old_book_ids = await _delete_existing_recommendations(session, mbti_type.id)
+        saved = await _rotate_from_library(
+            session, request.count, mbti_type.id, exclude_book_ids=old_book_ids
+        )
         # 兜底：库里可选书不足时，随机换书可能为空/偏少，转 AI 补足
         if len(saved) < request.count:
             await _delete_existing_recommendations(session, mbti_type.id)
