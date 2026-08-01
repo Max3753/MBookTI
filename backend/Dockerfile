@@ -16,6 +16,9 @@ COPY app ./app
 COPY scripts ./scripts
 COPY entrypoint.sh ./entrypoint.sh
 
+# 确保入口脚本有可执行权限（Windows 提交可能丢失 +x 位）
+RUN chmod +x ./entrypoint.sh
+
 # 输出端口
 EXPOSE 8000
 
