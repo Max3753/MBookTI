@@ -34,3 +34,10 @@ build/
 
 # Docker 部署指南（本地文档，不入库）
 Docker部署指南.md
+
+# 远程运维文档（含服务器 IP/密码等敏感信息，不入库）
+docs/remote-ops-guide.md
+
+# 数据库备份文件（含用户数据，不入库）
+mbookti_dump.sql
+*.sql
