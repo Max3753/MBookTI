@@ -96,6 +96,15 @@ async def update_me(
         if exists:
             raise HTTPException(status_code=400, detail="用户名已存在")
 
+    # MBTI 类型存在性校验（避免外键约束失败导致 500）
+    new_mbti_type_id = data.get("mbti_type_id")
+    if new_mbti_type_id is not None:
+        mbti = (
+            await session.execute(select(MbtiType).where(MbtiType.id == new_mbti_type_id))
+        ).scalar_one_or_none()
+        if mbti is None:
+            raise HTTPException(status_code=400, detail="MBTI 类型不存在")
+
     for field, value in data.items():
         setattr(current_user, field, value)
 

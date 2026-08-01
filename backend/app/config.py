@@ -126,7 +126,6 @@ def print_config():
     print(f"应用名称: {settings.app_name}")
     print(f"版本: {settings.app_version}")
     print(f"作者: {settings.app_author}")
-    print(f"服务器: {settings.host}:{settings.port}")
     print(f"数据库: {mask_db_url(settings.DB_URL)}")
 
     # 检查LLM配置

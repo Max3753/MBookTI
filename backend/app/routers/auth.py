@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -6,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.models import PasswordResetToken, User
 from app.schemas import ApiResponse
@@ -42,6 +44,8 @@ async def register(req: UserRegisterRequest, request: Request, session: AsyncSes
         select(User).where((User.username == req.username) | (User.email == req.email))
     )
     if existing.scalar_one_or_none():
+        # 注册冲突（用户名/邮箱已存在）也计数：防止通过注册接口无限枚举已注册账号
+        login_limiter.record_register_failure(ip)
         raise HTTPException(status_code=400, detail="用户名或邮箱已存在")
 
     user = User(
@@ -83,22 +87,6 @@ async def login(req: UserLoginRequest, request: Request, session: AsyncSession =
 
 # ---------- 忘记密码 ----------
 
-# 简单 per-IP 限流：同一 IP 10 分钟内最多 5 次 forgot 请求，防滥用/枚举
-_forgot_attempts: dict[str, list[float]] = {}
-
-
-def _forgot_limiter(ip: str) -> None:
-    import time
-
-    now = time.time()
-    window = 600  # 10 分钟
-    recent = [t for t in _forgot_attempts.get(ip, []) if now - t < window]
-    if len(recent) >= 5:
-        raise HTTPException(status_code=429, detail="请求过于频繁，请稍后再试")
-    recent.append(now)
-    _forgot_attempts[ip] = recent
-
-
 def _hash_token(token: str) -> str:
     """token 只存 sha256 哈希，绝不存明文。"""
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
@@ -112,12 +100,14 @@ async def forgot_password(
 ):
     """忘记密码：按邮箱生成一次性重置令牌。
 
-    - SMTP 未配置（dev 模式）：响应 data 返回 reset_token 明文，便于本地全链路测试；
-    - SMTP 已配置：真实发送邮件，data 为 None。
+    - SMTP 已配置：真实发送邮件，data 为 None；
+    - SMTP 未配置：仅开发模式（debug=True）回传明文 token 便于本地联调；
+      生产模式（debug=False）即使未配 SMTP 也绝不回传明文 token（防账号接管），
+      统一返回"已发送"文案。
     用户不存在时也返回相同文案（防邮箱枚举）。
     """
     ip = _client_ip(request)
-    _forgot_limiter(ip)
+    login_limiter.check_forgot(ip)
 
     user = (
         await session.execute(select(User).where(User.email == req.email))
@@ -131,12 +121,16 @@ async def forgot_password(
             expires_at=datetime.now(timezone.utc) + timedelta(minutes=30),
         ))
         await session.commit()
+        login_limiter.record_forgot(ip)
 
         if smtp_configured():
-            send_password_reset_email(user.email, token)
+            # SMTP 是阻塞 I/O，丢到线程池执行，避免阻塞事件循环
+            await asyncio.to_thread(send_password_reset_email, user.email, token)
             return ApiResponse(data=None, message="若该邮箱已注册，重置链接已发送")
-        # dev 模式：未配置 SMTP，直接回传明文 token 便于测试
-        return ApiResponse(data={"reset_token": token, "dev": True}, message="开发模式：重置令牌已生成")
+        # 未配置 SMTP：仅开发模式回传明文 token（生产绝不返回，防账号接管）
+        if settings.debug:
+            return ApiResponse(data={"reset_token": token, "dev": True}, message="开发模式：重置令牌已生成")
+        return ApiResponse(data=None, message="若该邮箱已注册，重置链接已发送")
 
     # 用户不存在：返回与成功一致的文案，避免暴露邮箱是否注册
     return ApiResponse(data=None, message="若该邮箱已注册，重置链接已发送")

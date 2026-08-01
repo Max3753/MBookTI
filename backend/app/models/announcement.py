@@ -1,5 +1,5 @@
 # 系统公告模型
-from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, DateTime, func
+from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, DateTime, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 from datetime import datetime
 from app.models.base import Base
@@ -22,6 +22,10 @@ class AnnouncementAck(Base):
     """公告确认记录：announcement_id + user_id 唯一，已确认的公告不再推送。"""
 
     __tablename__ = "announcement_acks"
+    __table_args__ = (
+        # 同用户对同公告只允许一条确认（防并发重复）
+        UniqueConstraint("announcement_id", "user_id", name="uq_announcement_user"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     announcement_id: Mapped[int] = mapped_column(

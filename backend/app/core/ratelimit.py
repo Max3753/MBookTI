@@ -49,8 +49,11 @@ class _RateLimiter:
         self._user_failures[username].append(now)
 
     def clear_login(self, ip: str, username: str) -> None:
-        """登录成功后清除该维度记录。"""
-        self._ip_failures.pop(ip, None)
+        """登录成功后清除该用户名的失败记录。
+
+        注意：只清 username 维度，不清 IP 维度——否则攻击者注册一个
+        账号即可登录清空 IP 计数，绕过 IP 维度的扫号限制。
+        """
         self._user_failures.pop(username, None)
 
     def check_register(self, ip: str) -> None:
@@ -61,6 +64,13 @@ class _RateLimiter:
         now = time.time()
         self._prune(self._ip_registers[ip], now)
         self._ip_registers[ip].append(now)
+
+    def record_register_failure(self, ip: str) -> None:
+        """注册冲突（用户名/邮箱已存在）也计数，防止无限枚举已注册账号。
+
+        与成功注册共用同一 IP 计数桶：10 次/5 分钟。
+        """
+        self.record_register(ip)
 
     def check_forgot(self, ip: str) -> None:
         """忘记密码限流：同一 IP 10 分钟内最多 5 次，超出抛 429。"""

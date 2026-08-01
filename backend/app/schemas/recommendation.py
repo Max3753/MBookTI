@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 class RecommendationBook(BaseModel):
     """推荐中返回的书籍信息(精简)"""
@@ -24,8 +24,8 @@ class RecommendationResponse(BaseModel):
 
 
 class AIGenerateRequest(BaseModel):
-    mbti_code: str
-    count: int = 5
+    mbti_code: str = Field(min_length=4, max_length=4, pattern=r"^[A-Za-z]{4}$")
+    count: int = Field(default=5, ge=1, le=10)  # 上限 10 本：防止 count 滥用导致巨额 AI 费用/大量豆瓣请求
 
 
 class AIGenerateBook(BaseModel):

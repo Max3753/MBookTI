@@ -3,8 +3,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import MbtiType, Book, Recommendation
+from app.models import MbtiType, Book, Recommendation, User
 from app.schemas import ApiResponse, AIGenerateRequest, RecommendationResponse
+from app.auth.deps import get_current_user
 from app.services.douban import search_cover
 
 router = APIRouter(
@@ -25,7 +26,8 @@ def _normalize_book(s: str) -> str:
 @router.post("/ai-generate", response_model=ApiResponse)
 async def ai_generate(
     request: AIGenerateRequest,
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),  # 需登录：防止匿名刷接口造成 AI 费用滥用
 ):
     type_result = await session.execute(
         select(MbtiType).where(MbtiType.code == request.mbti_code.upper())

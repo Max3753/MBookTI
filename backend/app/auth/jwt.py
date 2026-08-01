@@ -8,7 +8,7 @@ from app.config import settings
 
 SECRET_KEY = settings.jwt_secret_key  # 已由 config.Settings 校验非空/非默认
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.jwt_expire_minutes
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
