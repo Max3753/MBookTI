@@ -8,7 +8,7 @@ import { useAuth } from '../composables/useAuth'
 
 const route = useRoute()
 const code = route.params.code as string
-const { isLoggedIn } = useAuth()
+const { isLoggedIn, user } = useAuth()
 
 const mbtiType = ref<any>(null)
 const recommendations = ref<any[]>([])
@@ -136,7 +136,8 @@ function proxyUrl(url: string): string {
                     <img
                     :src="getImage(code)"
                     :alt="code"
-                    class="w-full h-full object-cover newsprint-img"
+                    class="w-full h-full object-cover"
+                    :class="user?.mbti_type_id === mbtiType?.id ? '' : 'newsprint-img'"
                     @error="(e: any) => e.target.style.display = 'none'"
                     >
                 </div>

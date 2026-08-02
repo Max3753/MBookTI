@@ -190,7 +190,8 @@ function getImage(code: string): string {
                         <img
                         :src="getImage(item.code)"
                         :alt="item.code"
-                        class="w-full h-full object-cover newsprint-img"
+                        class="w-full h-full object-cover"
+                        :class="user?.mbti_type_id === item.id ? '' : 'newsprint-img'"
                         @error="(e: any) => e.target.style.display = 'none'"
                         >
                     </div>

@@ -44,10 +44,16 @@ const emit = defineEmits<{
                                    transition-all duration-200 active:scale-95 animate-fade-up"
                             :style="{ animationDelay: '0.15s' }"
                             @click="emit('answer', 'left')">
-                            <div class="relative text-6xl py-14 flex items-center justify-center
+                            <div class="relative aspect-[4/3] flex items-center justify-center overflow-hidden
                                         bg-neutral-100 dark:bg-neutral-800
-                                        transition-transform duration-300 group-hover:scale-110">
-                                {{ question.left.emoji }}
+                                        transition-transform duration-300 group-hover:scale-105">
+                                <img
+                                    v-if="question.left.image"
+                                    :src="question.left.image"
+                                    :alt="question.left.label"
+                                    class="w-full h-full object-cover"
+                                >
+                                <span v-else class="text-6xl">{{ question.left.emoji }}</span>
                             </div>
                             <div class="py-3.5 text-center text-sm font-medium text-ink dark:text-paper">{{ question.left.label }}</div>
                         </button>
@@ -59,10 +65,16 @@ const emit = defineEmits<{
                                    transition-all duration-200 active:scale-95 animate-fade-up"
                             :style="{ animationDelay: '0.3s' }"
                             @click="emit('answer', 'right')">
-                            <div class="relative text-6xl py-14 flex items-center justify-center
+                            <div class="relative aspect-[4/3] flex items-center justify-center overflow-hidden
                                         bg-neutral-100 dark:bg-neutral-800
-                                        transition-transform duration-300 group-hover:scale-110">
-                                {{ question.right.emoji }}
+                                        transition-transform duration-300 group-hover:scale-105">
+                                <img
+                                    v-if="question.right.image"
+                                    :src="question.right.image"
+                                    :alt="question.right.label"
+                                    class="w-full h-full object-cover"
+                                >
+                                <span v-else class="text-6xl">{{ question.right.emoji }}</span>
                             </div>
                             <div class="py-3.5 text-center text-sm font-medium text-ink dark:text-paper">{{ question.right.label }}</div>
                         </button>

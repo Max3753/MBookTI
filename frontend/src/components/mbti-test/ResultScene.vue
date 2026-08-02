@@ -133,7 +133,7 @@ const dimensionVisuals = {
                     class="p-2.5 bg-paper dark:bg-[#201f16] border-2 border-ink dark:border-paper hard-shadow">
                     <img :src="getImage(props.type)"
                         :alt="props.type"
-                        class="w-36 h-36 object-cover newsprint-img animate-float" />
+                        class="w-36 h-36 object-cover animate-float" />
                 </div>
             </div>
 

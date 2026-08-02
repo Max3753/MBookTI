@@ -13,6 +13,7 @@ export type TestPhase = 'intro' | 'imagePick' | 'theater' | 'result';
 export interface ImageOption {
     emoji: string; // 占位：之后可替换为 img url
     label: string; // 占位：之后可去除
+    image?: string; // 实际图片资源 URL（来自 mbti_test_img/）
     score: keyof MBTIScores; // 点击后加到哪个维度
 }
 
@@ -34,6 +35,7 @@ export interface TheaterScene {
     id: string;
     title: string;  // 场景标题
     emoji: string; // 占位：之后可替换为 img url
+    image?: string; // 实际场景图片资源 URL（来自 mbti_test_img/）
     dialogue: string; // 对话内容
     options: TheaterOption[]; // 选项
 }

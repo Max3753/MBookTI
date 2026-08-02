@@ -21,11 +21,15 @@ const sceneThemes: Record<string, string> = {
     proj_p_sn: 'linear-gradient(135deg, #EFF7F6 0%, #E4F1EF 100%)',
     proj_p_end: 'linear-gradient(135deg, #F4F9EE 0%, #EBF3E2 100%)',
 }
-const themeBackground = computed(() =>
-    props.scene
+// 有实景图用实景图，否则回退纸色渐变
+const themeBackground = computed(() => {
+    if (props.scene?.image) {
+        return `url("${props.scene.image}") center/cover no-repeat`
+    }
+    return props.scene
         ? (sceneThemes[props.scene.id] ?? 'linear-gradient(135deg, #F6F4EF 0%, #EFECE4 100%)')
         : ''
-)
+})
 
 // ---- 对话发送者信息 ----
 const senderName = computed(() => props.scene?.title ?? '')
@@ -56,7 +60,7 @@ onUnmounted(() => clearInterval(timer))
         <!-- 底色（过渡间隙兜底） -->
         <div class="absolute inset-0 bg-paper dark:bg-[#17170f]"></div>
 
-        <!-- 场景背景：随 scene.id 交叉淡入 -->
+        <!-- 场景背景：随 scene.id 交叉淡入（实景图或纸色渐变兜底） -->
         <Transition name="bg-fade" mode="out-in">
             <div :key="props.scene?.id ?? 'none'"
                 class="absolute inset-0"
@@ -78,7 +82,8 @@ onUnmounted(() => clearInterval(timer))
                 <div class="flex items-center gap-2.5 mb-2 animate-fade-up">
                     <div class="w-9 h-9 bg-ink text-paper dark:bg-paper dark:text-ink
                                 flex items-center justify-center font-serif font-bold text-sm">{{ senderInitial }}</div>
-                    <span class="text-ink dark:text-paper text-sm font-medium tracking-wide">{{ senderName }}</span>
+                    <span class="px-2 py-0.5 bg-paper dark:bg-[#201f16] border border-ink/40 dark:border-paper/40
+                                 text-ink dark:text-paper text-sm font-medium tracking-wide">{{ senderName }}</span>
                 </div>
                 <div class="relative chat-tail bg-paper dark:bg-[#201f16] border-2 border-ink dark:border-paper
                             hard-shadow p-5 animate-fade-up"

@@ -1,11 +1,14 @@
 import type { TheaterScene } from "../types/mbtiTest";
 
+const img = (name: string) => new URL(`./mbti_test_img/${name}`, import.meta.url).href
+
 export const theaterScripts: TheaterScene[] = [
     // ==================== 入口场景 ====================
     {
         id: 'proj_start',
         title: '老板的突然通知',
         emoji: '🏢',
+        image: img('proj_start.jpeg'),
         dialogue: '老板：“原计划取消，明天要新方案。”',
         options: [
         {
@@ -26,6 +29,7 @@ export const theaterScripts: TheaterScene[] = [
         id: 'proj_j_branch',
         title: '进入执行模式',
         emoji: '📋',
+        image: img('proj_j_path.jpeg'),
         dialogue: '你很快理清了思路，两个方案轮廓浮现。一个稳妥但保守，另一个新颖但冒险。',
         options: [
         {
@@ -44,6 +48,7 @@ export const theaterScripts: TheaterScene[] = [
         id: 'proj_j_tf',
         title: '方案的选择',
         emoji: '📊',
+        image: img('proj_j_f.jpeg'),
         dialogue: '你选定了方案。现在需要向客户说明核心逻辑。时间紧迫，你会怎么准备？',
         options: [
         {
@@ -62,6 +67,7 @@ export const theaterScripts: TheaterScene[] = [
         id: 'proj_j_end',
         title: '准备就绪',
         emoji: '✅',
+        image: img('proj_j_t.jpeg'),
         dialogue: '你整理好所有材料，看了一眼时钟，对自己说：“可以了。”',
         options: [
         {
@@ -77,6 +83,7 @@ export const theaterScripts: TheaterScene[] = [
         id: 'proj_p_branch',
         title: '灵感漫游',
         emoji: '☕',
+        image: img('proj_p_n.jpeg'),
         dialogue: '喝咖啡时你随手翻着行业动态，一个跨界玩法的念头突然击中了你。',
         options: [
         {
@@ -95,6 +102,7 @@ export const theaterScripts: TheaterScene[] = [
         id: 'proj_p_sn',
         title: '创意的岔路口',
         emoji: '💡',
+        image: img('proj_p_path.jpeg'),
         dialogue: '你的草稿纸上已经画满了疯狂的念头，但现在需要落地成一个具体方案。',
         options: [
         {
@@ -113,6 +121,7 @@ export const theaterScripts: TheaterScene[] = [
         id: 'proj_p_end',
         title: '灵感成型',
         emoji: '🎨',
+        image: img('proj_p_s.jpeg'),
         dialogue: '你看着眼前的成果，虽然不完美，但充满了惊喜的火花。',
         options: [
         {
