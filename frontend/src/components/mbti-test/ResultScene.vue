@@ -79,7 +79,7 @@ onMounted(() => {
 // 角色图 URL（复用 HomePage 的模式）
 function getImage(code: string): string {
     try {
-        return new URL(`../../resources/${code.toLowerCase()}.png`, import.meta.url).href
+        return new URL(`../../resources/mbti_img/${code.toLowerCase()}.png`, import.meta.url).href
     } catch {
         return ''
     }
