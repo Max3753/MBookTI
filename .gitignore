@@ -19,6 +19,7 @@ Thumbs.db
 
 # Logs
 *.log
+*.log.err
 
 # Dependencies
 node_modules/
@@ -31,6 +32,10 @@ build/
 
 # Playwright MCP 临时目录
 .playwright-mcp/
+
+# 本地设计/需求文档（不入库）
+additions/
+design/
 
 # Docker 部署指南（本地文档，不入库）
 Docker部署指南.md

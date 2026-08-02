@@ -57,6 +57,11 @@ const router = createRouter({
             meta: { requiresAuth: true, requiresAdmin: true },
             component: () => import ('../views/AdminPage.vue'),
         },
+        {
+            path: "/test",
+            name: "mbti-test",
+            component: () => import ('../views/MbtiTestPage.vue'),
+        }
     ],
 })
 
@@ -74,5 +79,6 @@ router.beforeEach((to, _from, next) => {
         next()
     }
 })
+
 
 export default router

@@ -45,5 +45,11 @@ export function useAuth() {
         delete api.defaults.headers.common['Authorization']
     }
 
-    return { token, user: currentUser, isLoggedIn, login, register, logout }
+    // 合并补丁到当前登录用户并写回 localStorage（内存 + 持久化同步）
+    function updateUser(patch: Partial<any>) {
+        currentUser.value = { ...(currentUser.value || {}), ...patch }
+        localStorage.setItem('user', JSON.stringify(currentUser.value))
+    }
+
+    return { token, user: currentUser, isLoggedIn, login, register, logout, updateUser }
 }
