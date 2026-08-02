@@ -31,107 +31,119 @@ onMounted(() => {
 onUnmounted(() => {
     if (unreadTimer !== null) window.clearInterval(unreadTimer)
 })
+
+// 报纸头版元数据：今日日期
+const today = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
-    <header class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-100 dark:border-gray-700">
-      <div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-        <div>
-          <router-link to="/" class="text-xl font-bold text-indigo-600 dark:text-indigo-400">
-            {{ t.title }}
+  <div class="min-h-screen bg-paper text-ink dark:bg-[#17170f] dark:text-paper">
+    <!-- ============ 报纸头版 Masthead ============ -->
+    <header class="border-b-4 border-ink dark:border-paper">
+      <div class="max-w-screen-xl mx-auto px-4 sm:px-6">
+        <!-- 顶部元数据条 -->
+        <div class="flex items-center justify-between border-b border-ink/30 dark:border-paper/30 py-1.5 edition-label text-neutral-500 dark:text-neutral-400">
+          <span class="hidden sm:inline">VOL. 1 · {{ today }}</span>
+          <span class="sm:hidden">VOL. 1</span>
+          <span class="text-editorial font-semibold">★ 晨报版 · MORNING EDITION</span>
+          <span>{{ isLoggedIn ? '已登录' : '未登录' }}</span>
+        </div>
+
+        <!-- 报头标题 -->
+        <div class="py-6 text-center">
+          <router-link to="/" class="inline-block group">
+            <h1 class="font-serif font-black text-5xl sm:text-6xl lg:text-7xl leading-[0.9] tracking-tighter group-hover:text-editorial transition-colors duration-200">
+              {{ t.title }}
+            </h1>
+            <p class="mt-2 font-serif italic text-neutral-500 dark:text-neutral-400 text-sm sm:text-base">{{ t.subtitle }}</p>
           </router-link>
-          <span class="ml-2 text-sm text-gray-400 dark:text-gray-500">{{ t.subtitle }}</span>
         </div>
-        <div class="flex items-center gap-2">
-          <!-- Auth buttons -->
-          <template v-if="isLoggedIn">
-            <router-link
-              to="/notifications"
-              class="relative p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 cursor-pointer"
-              :title="'通知' + (unread ? `（${unread} 条未读）` : '')"
-            >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
-              </svg>
-              <span v-if="unread > 0" class="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
-                {{ unread > 99 ? '99+' : unread }}
-              </span>
-            </router-link>
-            <router-link
-              v-if="user?.is_admin"
-              to="/admin"
-              class="relative p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 cursor-pointer"
-              title="管理后台"
-            >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-              </svg>
-            </router-link>
-            <router-link
-              to="/profile"
-              class="flex items-center gap-2 group cursor-pointer"
-              :title="`${user?.username} · 个人中心`"
-            >
-              <span
-                class="w-8 h-8 rounded-full text-white flex items-center justify-center text-sm font-bold bg-indigo-500 group-hover:ring-2 group-hover:ring-indigo-300 transition-all duration-200"
-              >
-                {{ (user?.username || '?')[0].toUpperCase() }}
-              </span>
-              <span class="text-sm text-gray-600 dark:text-gray-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                {{ user?.username }}
-              </span>
-            </router-link>
-            <button
-              @click="logout"
-              class="px-3 py-1.5 text-xs rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200 cursor-pointer"
-            >
-              退出
-            </button>
-          </template>
-          <template v-else>
-            <router-link
-              to="/login"
-              class="px-3 py-1.5 text-xs rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200 cursor-pointer"
-            >
-              登录
-            </router-link>
-            <router-link
-              to="/register"
-              class="px-3 py-1.5 text-xs rounded-lg bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400 text-white transition-all duration-200 cursor-pointer"
-            >
-              注册
-            </router-link>
-          </template>
-          <!-- Theme toggle -->
-          <button @click="toggleTheme" class="px-3 py-1.5 text-xs rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200 cursor-pointer">
-            {{ isDark ? '☀️' : '🌙' }}
-          </button>
-        </div>
+
+        <!-- 导航栏 -->
+        <nav class="border-t border-ink/30 dark:border-paper/30">
+          <div class="flex items-center justify-between py-2">
+            <div class="flex items-center gap-4 sm:gap-6">
+              <router-link to="/" class="edition-label text-ink dark:text-paper hover:text-editorial transition-colors duration-200">首页</router-link>
+              <router-link v-if="user?.is_admin" to="/admin" class="edition-label text-ink dark:text-paper hover:text-editorial transition-colors duration-200">管理</router-link>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <!-- 通知铃铛 -->
+              <template v-if="isLoggedIn">
+                <router-link
+                  to="/notifications"
+                  class="relative min-h-[44px] min-w-[44px] flex items-center justify-center text-ink dark:text-paper hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors duration-200 cursor-pointer"
+                  :title="'通知' + (unread ? `（${unread} 条未读）` : '')"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                  </svg>
+                  <span v-if="unread > 0" class="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 bg-editorial text-paper text-[10px] font-bold flex items-center justify-center">
+                    {{ unread > 99 ? '99+' : unread }}
+                  </span>
+                </router-link>
+              </template>
+
+              <!-- 用户区 -->
+              <template v-if="isLoggedIn">
+                <router-link
+                  to="/profile"
+                  class="flex items-center gap-2 group cursor-pointer min-h-[44px] px-2"
+                  :title="`${user?.username} · 个人中心`"
+                >
+                  <span class="w-8 h-8 text-paper bg-ink dark:bg-paper dark:text-ink flex items-center justify-center text-sm font-bold">
+                    {{ (user?.username || '?')[0].toUpperCase() }}
+                  </span>
+                  <span class="hidden sm:inline text-sm font-medium group-hover:text-editorial transition-colors">{{ user?.username }}</span>
+                </router-link>
+                <button
+                  @click="logout"
+                  class="np-btn np-btn-ghost !min-h-[36px] px-3 text-xs cursor-pointer"
+                >
+                  退出
+                </button>
+              </template>
+              <template v-else>
+                <router-link to="/login" class="np-btn np-btn-ghost !min-h-[36px] px-3 text-xs">登录</router-link>
+                <router-link to="/register" class="np-btn np-btn-primary !min-h-[36px] px-4 text-xs">注册</router-link>
+              </template>
+
+              <!-- 主题切换 -->
+              <button @click="toggleTheme" class="np-btn np-btn-ghost !min-h-[36px] px-3 text-xs cursor-pointer">
+                {{ isDark ? '☀ 日间' : '☾ 夜间' }}
+              </button>
+            </div>
+          </div>
+        </nav>
       </div>
     </header>
-    <main class="max-w-4xl mx-auto px-4 py-6">
+
+    <!-- ============ 主内容区：报纸栏线 ============ -->
+    <main class="max-w-screen-xl mx-auto px-4 sm:px-6 py-8">
       <router-view v-slot="{ Component }">
         <Transition name="fade" mode="out-in">
           <component :is="Component" :key="$route.fullPath" />
         </Transition>
       </router-view>
     </main>
+
+    <!-- ============ 页脚：报纸版权线 ============ -->
+    <footer class="border-t-4 border-ink dark:border-paper mt-12">
+      <div class="max-w-screen-xl mx-auto px-4 sm:px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-2 edition-label text-neutral-500 dark:text-neutral-400">
+        <span>{{ t.title }} · {{ t.subtitle }}</span>
+        <span>EDITION: VOL 1.0 · © {{ new Date().getFullYear() }}</span>
+      </div>
+    </footer>
   </div>
 </template>
 
 <style>
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition: opacity 0.15s ease-out;
 }
-.fade-enter-from {
-  opacity: 0;
-  transform: translateY(8px);
-}
+.fade-enter-from,
 .fade-leave-to {
   opacity: 0;
-  transform: translateY(-8px);
 }
 </style>

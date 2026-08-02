@@ -96,68 +96,64 @@ const dimensions = [
 // 维度对比色：左（前者）暖色 vs 右（后者）冷色
 const dimensionVisuals = {
     EI: {
-        left: 'bg-gradient-to-r from-orange-400 to-amber-400', leftText: 'text-orange-500',
-        right: 'bg-gradient-to-r from-sky-400 to-blue-500', rightText: 'text-sky-500',
+        left: 'bg-ink', leftText: 'text-ink',
+        right: 'bg-neutral-400', rightText: 'text-neutral-500',
     },
     SN: {
-        left: 'bg-gradient-to-r from-amber-400 to-yellow-400', leftText: 'text-amber-500',
-        right: 'bg-gradient-to-r from-cyan-400 to-blue-500', rightText: 'text-cyan-500',
+        left: 'bg-editorial', leftText: 'text-editorial',
+        right: 'bg-neutral-400', rightText: 'text-neutral-500',
     },
     TF: {
-        left: 'bg-gradient-to-r from-rose-400 to-red-400', leftText: 'text-rose-500',
-        right: 'bg-gradient-to-r from-emerald-400 to-green-500', rightText: 'text-emerald-500',
+        left: 'bg-ink', leftText: 'text-ink',
+        right: 'bg-editorial', rightText: 'text-editorial',
     },
     JP: {
-        left: 'bg-gradient-to-r from-orange-400 to-amber-500', leftText: 'text-orange-500',
-        right: 'bg-gradient-to-r from-teal-400 to-cyan-500', rightText: 'text-teal-500',
+        left: 'bg-editorial', leftText: 'text-editorial',
+        right: 'bg-neutral-400', rightText: 'text-neutral-500',
     },
 } as const
 </script>
 
 <template>
-    <div class="relative min-h-screen px-4 py-10 overflow-hidden
-                bg-gradient-to-b from-indigo-50 via-violet-50/60 to-fuchsia-50">
-        <!-- 顶部光晕 -->
-        <div class="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[140%] h-96
-                    bg-[radial-gradient(ellipse_at_top,rgba(129,140,248,0.28),transparent_70%)]" aria-hidden="true"></div>
+    <div class="newsprint-texture relative min-h-screen px-4 py-10 overflow-hidden
+                bg-paper dark:bg-[#17170f]">
 
         <div class="relative max-w-md mx-auto">
             <!-- 类型揭晓：放大浮现 -->
             <div class="text-center animate-scale-in">
-                <p class="text-xs tracking-[0.4em] text-indigo-400 font-semibold">你的 MBTI 类型</p>
-                <h1 class="mt-3 text-5xl font-extrabold tracking-wide
-                           bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 bg-clip-text text-transparent
-                        drop-shadow-sm">{{ props.type }}</h1>
+                <p class="edition-label text-editorial">你的 MBTI 类型</p>
+                <h1 class="mt-3 text-5xl font-serif font-black tracking-wide
+                           text-ink dark:text-paper">{{ props.type }}</h1>
             </div>
-            <p class="text-center text-gray-500 mt-3 animate-fade-up" style="animation-delay: 0.15s">{{ feedback?.metaphor }}</p>
+            <p class="text-center text-neutral-600 dark:text-neutral-300 mt-3 animate-fade-up" style="animation-delay: 0.15s">{{ feedback?.metaphor }}</p>
 
             <!-- 角色图：延迟浮入 + 玻璃框 -->
             <div class="flex justify-center my-8 animate-scale-in" style="animation-delay: 0.3s">
                 <div v-if="getImage(props.type)"
-                    class="p-2.5 rounded-[2rem] bg-white/70 backdrop-blur-xl shadow-xl shadow-indigo-500/15">
+                    class="p-2.5 bg-paper dark:bg-[#201f16] border-2 border-ink dark:border-paper hard-shadow">
                     <img :src="getImage(props.type)"
                         :alt="props.type"
-                        class="w-36 h-36 rounded-[1.5rem] object-cover animate-float" />
+                        class="w-36 h-36 object-cover newsprint-img animate-float" />
                 </div>
             </div>
 
             <!-- 维度条：依次展开 + 左暖右冷 -->
             <div class="space-y-4">
                 <div v-for="(d, i) in dimensions" :key="d.pair"
-                    class="bg-white/70 backdrop-blur-xl rounded-3xl p-5 shadow-xl shadow-indigo-500/10 animate-fade-up"
+                    class="bg-paper dark:bg-[#201f16] border border-ink dark:border-paper p-5 hard-shadow animate-fade-up"
                     :style="{ animationDelay: (0.45 + i * 0.12) + 's' }">
                     <div class="flex justify-between items-center text-sm mb-3">
                         <span class="flex items-baseline gap-2">
                             <span class="font-extrabold text-lg" :class="dimensionVisuals[d.pair].leftText">{{ d.pair[0] }}</span>
-                            <span class="text-gray-600 font-medium">{{ d.label }}</span>
+                            <span class="text-neutral-600 dark:text-neutral-300 font-medium">{{ d.label }}</span>
                         </span>
                         <span class="font-extrabold text-lg" :class="dimensionVisuals[d.pair].rightText">{{ d.pair[1] }}</span>
                     </div>
-                    <div class="flex h-3 bg-gray-100/80 rounded-full overflow-hidden">
-                        <div class="h-full rounded-full bar-fill"
+                    <div class="flex h-3 bg-divider dark:bg-neutral-700 border border-ink dark:border-paper overflow-hidden">
+                        <div class="h-full bar-fill"
                             :class="dimensionVisuals[d.pair].left"
                             :style="{ width: detail[d.pair] + '%', animationDelay: (0.55 + i * 0.12) + 's' }"></div>
-                        <div class="h-full rounded-full bar-fill"
+                        <div class="h-full bar-fill"
                             :class="dimensionVisuals[d.pair].right"
                             :style="{ width: (100 - detail[d.pair]) + '%', animationDelay: (0.7 + i * 0.12) + 's' }"></div>
                     </div>
@@ -170,33 +166,33 @@ const dimensionVisuals = {
 
             <!-- 三个一反馈：错落浮现 -->
             <div class="mt-6 space-y-3">
-                <div class="bg-white/70 backdrop-blur-xl rounded-3xl p-5 shadow-xl shadow-indigo-500/10 animate-fade-up"
+                <div class="bg-paper dark:bg-[#201f16] border border-ink dark:border-paper p-5 hard-shadow animate-fade-up"
                     style="animation-delay: 1.05s">
-                    <div class="text-xs font-bold text-indigo-500 mb-1.5 tracking-widest">你的盲区</div>
-                    <p class="text-sm text-gray-700 leading-relaxed">{{ feedback?.blindSpot }}</p>
+                    <div class="edition-label text-editorial mb-1.5">你的盲区</div>
+                    <p class="text-sm text-neutral-700 dark:text-neutral-300 leading-relaxed">{{ feedback?.blindSpot }}</p>
                 </div>
-                <div class="bg-white/70 backdrop-blur-xl rounded-3xl p-5 shadow-xl shadow-indigo-500/10 animate-fade-up"
+                <div class="bg-paper dark:bg-[#201f16] border border-ink dark:border-paper p-5 hard-shadow animate-fade-up"
                     style="animation-delay: 1.2s">
-                    <div class="text-xs font-bold text-indigo-500 mb-1.5 tracking-widest">相处指南</div>
-                    <p class="text-sm text-gray-700 leading-relaxed">{{ feedback?.manual }}</p>
+                    <div class="edition-label text-editorial mb-1.5">相处指南</div>
+                    <p class="text-sm text-neutral-700 dark:text-neutral-300 leading-relaxed">{{ feedback?.manual }}</p>
                 </div>
             </div>
 
             <!-- 保存结果：登录可保存到资料 / 未登录引导 -->
             <div class="mt-6 animate-fade-up" style="animation-delay: 1.35s">
-                <div class="bg-white/70 backdrop-blur-xl rounded-3xl p-5 shadow-xl shadow-indigo-500/10">
-                    <div class="text-xs font-bold text-indigo-500 mb-1.5 tracking-widest">保存结果</div>
+                <div class="bg-paper dark:bg-[#201f16] border border-ink dark:border-paper p-5 hard-shadow">
+                    <div class="edition-label text-editorial mb-1.5">保存结果</div>
                     <template v-if="isLoggedIn">
-                        <p class="text-sm text-gray-600 mb-3 leading-relaxed">
-                            把 <span class="font-bold text-gray-800">{{ props.type }}</span> 保存到你的个人资料，
+                        <p class="text-sm text-neutral-600 dark:text-neutral-300 mb-3 leading-relaxed">
+                            把 <span class="font-bold text-ink dark:text-paper">{{ props.type }}</span> 保存到你的个人资料，
                             AI 推荐与首页「我的」标记将基于此类型。
                         </p>
                         <button
                             :disabled="saveButtonDisabled"
                             @click="saveResult"
-                            class="w-full py-3 rounded-2xl font-semibold text-white transition
-                                   bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500
-                                   shadow-lg shadow-indigo-500/25
+                            class="w-full py-3 font-semibold text-paper bg-ink border-2 border-ink
+                                   dark:text-ink dark:bg-paper dark:border-paper
+                                   hard-shadow-hover transition
                                    disabled:opacity-60 disabled:cursor-not-allowed">
                             {{ saveButtonText }}
                         </button>
@@ -204,15 +200,16 @@ const dimensionVisuals = {
                             :class="saveOk ? 'text-emerald-500' : 'text-red-500'">{{ saveMsg }}</p>
                     </template>
                     <template v-else>
-                        <p class="text-sm text-gray-600 mb-3 leading-relaxed">
-                            登录后即可把 <span class="font-bold text-gray-800">{{ props.type }}</span> 保存到个人资料，
+                        <p class="text-sm text-neutral-600 dark:text-neutral-300 mb-3 leading-relaxed">
+                            登录后即可把 <span class="font-bold text-ink dark:text-paper">{{ props.type }}</span> 保存到个人资料，
                             获得更精准的 AI 推荐。
                         </p>
                         <button
                             @click="router.push('/login')"
-                            class="w-full py-3 rounded-2xl font-semibold text-white transition
-                                   bg-indigo-600 hover:bg-indigo-700
-                                   shadow-lg shadow-indigo-500/25">
+                            class="w-full py-3 font-semibold text-ink dark:text-paper transition
+                                   bg-transparent border-2 border-ink dark:border-paper
+                                   hover:bg-ink hover:text-paper dark:hover:bg-paper dark:hover:text-ink
+                                   hard-shadow-hover">
                             去登录
                         </button>
                     </template>

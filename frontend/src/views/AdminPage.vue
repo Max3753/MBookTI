@@ -143,26 +143,30 @@ onMounted(() => {
 </script>
 
 <template>
-    <div>
-        <h1 class="text-xl font-bold text-gray-800 dark:text-gray-100 mb-4">管理后台</h1>
+    <div class="space-y-6">
+        <!-- 报头 -->
+        <header class="animate-newsprint-in">
+            <div class="flex items-center justify-between border-b border-ink/30 dark:border-paper/30 pb-1.5 mb-2 edition-label text-neutral-500 dark:text-neutral-400">
+                <span>MBookTI · 编辑部 · ADMIN DESK</span>
+                <span class="text-editorial font-semibold">★ 今日排印</span>
+            </div>
+            <h1 class="font-serif text-4xl sm:text-5xl font-black tracking-tighter border-b-4 border-editorial pb-3">管理后台</h1>
+        </header>
 
         <!-- Tab 切换 -->
-        <div class="flex gap-2 mb-6">
+        <div class="flex mb-6">
             <button
                 @click="activeTab = 'announcements'"
-                class="px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
-                :class="activeTab === 'announcements'
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'"
+                class="np-btn cursor-pointer"
+                :class="activeTab === 'announcements' ? 'np-btn-primary' : 'np-btn-ghost'"
             >
                 公告管理
             </button>
+            <div class="w-px bg-ink/30 dark:bg-paper/30"></div>
             <button
                 @click="activeTab = 'messages'"
-                class="px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
-                :class="activeTab === 'messages'
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'"
+                class="np-btn cursor-pointer"
+                :class="activeTab === 'messages' ? 'np-btn-primary' : 'np-btn-ghost'"
             >
                 用户消息
             </button>
@@ -171,28 +175,31 @@ onMounted(() => {
         <!-- ============ 公告管理 ============ -->
         <section v-if="activeTab === 'announcements'" class="space-y-6">
             <!-- 发布表单 -->
-            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-5">
-                <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-4">发布系统公告</h2>
+            <div class="np-card p-6 animate-newsprint-in">
+                <div class="flex items-center justify-between border-b-2 border-ink dark:border-paper pb-2 mb-5">
+                    <h2 class="font-serif text-xl font-bold tracking-tight">发布系统公告</h2>
+                    <span class="edition-label text-editorial">NOTICE BOARD</span>
+                </div>
                 <input
                     v-model="annTitle"
                     type="text"
                     placeholder="公告标题（1-100 字）"
                     maxlength="100"
-                    class="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-3"
+                    class="np-input mb-4"
                 />
                 <textarea
                     v-model="annContent"
                     placeholder="公告内容（1-5000 字）"
                     maxlength="5000"
                     rows="4"
-                    class="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y mb-3"
+                    class="np-input border-2 border-ink dark:border-paper mb-3 resize-y"
                 ></textarea>
                 <div class="flex items-center justify-between">
-                    <span class="text-xs text-gray-400">{{ annContent.length }}/5000</span>
+                    <span class="edition-label text-neutral-400 dark:text-neutral-500">{{ annContent.length }}/5000</span>
                     <button
                         @click="publish"
                         :disabled="publishing || !annTitle.trim() || !annContent.trim()"
-                        class="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                        class="np-btn np-btn-primary !min-h-[36px] !px-4"
                     >
                         {{ publishing ? '发布中...' : '发布公告' }}
                     </button>
@@ -200,105 +207,147 @@ onMounted(() => {
             </div>
 
             <!-- 已发布列表 -->
-            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
-                <div class="px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
-                    <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-200">已发布公告（{{ annTotal }}）</h2>
+            <div class="np-card overflow-hidden animate-newsprint-in">
+                <div class="px-5 py-4 border-b-2 border-ink dark:border-paper flex items-center justify-between">
+                    <h2 class="font-serif text-lg font-bold tracking-tight">已发布公告</h2>
+                    <span class="edition-label text-neutral-500 dark:text-neutral-400">{{ annTotal }} 条</span>
                 </div>
-                <div v-if="annLoading" class="p-8 text-center text-gray-400 text-sm">加载中...</div>
-                <div v-else-if="announcements.length === 0" class="p-8 text-center text-gray-400 text-sm">暂无公告</div>
-                <div v-else class="divide-y divide-gray-100 dark:divide-gray-700">
-                    <div v-for="a in announcements" :key="a.id" class="px-5 py-4 flex items-start gap-3">
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-2">
-                                <span class="text-sm font-medium text-gray-800 dark:text-gray-100">{{ a.title }}</span>
+                <div v-if="annLoading" class="p-10 text-center">
+                    <span class="edition-label text-neutral-400">加载中…</span>
+                </div>
+                <div v-else-if="announcements.length === 0" class="p-10 text-center">
+                    <span class="edition-label text-neutral-400">暂无公告</span>
+                </div>
+                <table v-else class="np-table w-full">
+                    <thead>
+                        <tr>
+                            <th class="edition-label !font-mono">公告标题</th>
+                            <th class="edition-label !font-mono">状态</th>
+                            <th class="edition-label !font-mono">发布时间</th>
+                            <th class="edition-label !font-mono !text-right">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="a in announcements" :key="a.id" class="align-top">
+                            <td>
+                                <div class="font-serif font-bold text-ink dark:text-paper">{{ a.title }}</div>
+                                <p class="text-xs text-neutral-500 dark:text-neutral-400 mt-1 line-clamp-2">{{ a.content }}</p>
+                            </td>
+                            <td>
                                 <span
-                                    class="text-xs px-1.5 py-0.5 rounded shrink-0"
-                                    :class="a.is_active
-                                        ? 'bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400'
-                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'"
+                                    class="np-badge"
+                                    :class="a.is_active ? 'np-badge-editorial' : 'np-badge-outline'"
                                 >
                                     {{ a.is_active ? '推送中' : '已下线' }}
                                 </span>
-                            </div>
-                            <p class="text-sm text-gray-600 dark:text-gray-300 mt-1 line-clamp-2">{{ a.content }}</p>
-                            <p class="text-xs text-gray-400 mt-1">{{ formatTime(a.created_at) }}</p>
-                        </div>
-                        <button
-                            v-if="a.is_active"
-                            @click="deactivate(a.id)"
-                            class="px-3 py-1.5 rounded-lg text-xs text-red-500 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/30 shrink-0 cursor-pointer"
-                        >
-                            下线
-                        </button>
-                    </div>
-                </div>
+                            </td>
+                            <td class="!font-mono text-neutral-500 dark:text-neutral-400 whitespace-nowrap">{{ formatTime(a.created_at) }}</td>
+                            <td class="text-right">
+                                <button
+                                    v-if="a.is_active"
+                                    @click="deactivate(a.id)"
+                                    class="np-btn np-btn-secondary !min-h-[32px] !px-3"
+                                >
+                                    下线
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </section>
 
         <!-- ============ 用户消息 ============ -->
         <section v-else class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <!-- 用户列表 -->
-            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
-                <div class="px-5 py-4 border-b border-gray-100 dark:border-gray-700">
-                    <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-200">选择目标用户（{{ userTotal }} 人）</h2>
+            <div class="np-card overflow-hidden animate-newsprint-in">
+                <div class="px-5 py-4 border-b-2 border-ink dark:border-paper">
+                    <div class="flex items-center justify-between">
+                        <h2 class="font-serif text-lg font-bold tracking-tight">选择目标用户</h2>
+                        <span class="edition-label text-neutral-500 dark:text-neutral-400">{{ userTotal }} 人</span>
+                    </div>
                     <input
                         v-model="searchText"
                         type="text"
                         placeholder="按用户名或 ID 过滤"
-                        class="mt-3 w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        class="np-input mt-4"
                     />
                 </div>
-                <div v-if="usersLoading" class="p-8 text-center text-gray-400 text-sm">加载中...</div>
-                <div v-else-if="filteredUsers.length === 0" class="p-8 text-center text-gray-400 text-sm">无匹配用户</div>
-                <div v-else class="divide-y divide-gray-100 dark:divide-gray-700 max-h-[420px] overflow-y-auto">
-                    <button
-                        v-for="u in filteredUsers"
-                        :key="u.id"
-                        @click="selectUser(u.id)"
-                        class="w-full px-5 py-3 flex items-center justify-between text-left transition-colors cursor-pointer"
-                        :class="selectedUserId === u.id
-                            ? 'bg-indigo-50 dark:bg-indigo-900/30'
-                            : 'hover:bg-gray-50 dark:hover:bg-gray-900/40'"
-                    >
-                        <div class="flex items-center gap-2 min-w-0">
-                            <span class="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-700 text-xs font-bold flex items-center justify-center text-gray-500 dark:text-gray-400 shrink-0">
-                                {{ u.username.charAt(0).toUpperCase() }}
-                            </span>
-                            <div class="min-w-0">
-                                <p class="text-sm text-gray-800 dark:text-gray-100 truncate">{{ u.username }}</p>
-                                <p class="text-xs text-gray-400">#{{ u.id }}</p>
-                            </div>
-                            <span v-if="u.is_admin" class="text-xs px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-300 shrink-0">管理</span>
-                        </div>
-                        <span v-if="selectedUserId === u.id" class="text-indigo-500 text-sm shrink-0">✓</span>
-                    </button>
+                <div v-if="usersLoading" class="p-10 text-center">
+                    <span class="edition-label text-neutral-400">加载中…</span>
+                </div>
+                <div v-else-if="filteredUsers.length === 0" class="p-10 text-center">
+                    <span class="edition-label text-neutral-400">无匹配用户</span>
+                </div>
+                <div v-else class="max-h-[420px] overflow-y-auto">
+                    <table class="np-table w-full">
+                        <thead>
+                            <tr>
+                                <th class="edition-label !font-mono">用户</th>
+                                <th class="edition-label !font-mono">ID</th>
+                                <th class="edition-label !font-mono">角色</th>
+                                <th class="edition-label !font-mono !text-right">选择</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr
+                                v-for="u in filteredUsers"
+                                :key="u.id"
+                                @click="selectUser(u.id)"
+                                class="cursor-pointer"
+                                :class="selectedUserId === u.id
+                                    ? 'bg-neutral-100 dark:bg-neutral-700/50'
+                                    : 'hover:bg-neutral-50 dark:hover:bg-neutral-700/30'"
+                            >
+                                <td>
+                                    <div class="flex items-center gap-2 min-w-0">
+                                        <span class="w-8 h-8 border border-ink dark:border-paper text-xs font-mono font-bold flex items-center justify-center text-ink dark:text-paper shrink-0">
+                                            {{ u.username.charAt(0).toUpperCase() }}
+                                        </span>
+                                        <span class="font-medium text-ink dark:text-paper truncate">{{ u.username }}</span>
+                                    </div>
+                                </td>
+                                <td class="!font-mono text-neutral-500 dark:text-neutral-400">#{{ u.id }}</td>
+                                <td>
+                                    <span v-if="u.is_admin" class="np-badge np-badge-outline">管理</span>
+                                    <span v-else class="edition-label text-neutral-400 dark:text-neutral-500">读者</span>
+                                </td>
+                                <td class="text-right">
+                                    <span v-if="selectedUserId === u.id" class="font-mono font-bold text-editorial">✓</span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
             <!-- 发送区 + 重置密码 -->
             <div class="space-y-6">
-                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-5 h-fit">
-                    <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-4">发送管理员消息</h2>
-                    <div class="mb-3">
-                        <span class="text-xs text-gray-400">目标用户：</span>
-                        <span v-if="selectedUserId !== null" class="text-sm font-medium text-indigo-600 dark:text-indigo-400">
+                <div class="np-card p-6 h-fit animate-newsprint-in">
+                    <div class="flex items-center justify-between border-b-2 border-ink dark:border-paper pb-2 mb-5">
+                        <h2 class="font-serif text-xl font-bold tracking-tight">发送管理员消息</h2>
+                        <span class="edition-label text-editorial">DESPATCH</span>
+                    </div>
+                    <div class="mb-3 flex items-center gap-2">
+                        <span class="edition-label text-neutral-500 dark:text-neutral-400">目标用户</span>
+                        <span v-if="selectedUserId !== null" class="font-mono text-sm font-semibold text-editorial">
                             {{ users.find((u) => u.id === selectedUserId)?.username || `#${selectedUserId}` }}
                         </span>
-                        <span v-else class="text-sm text-gray-400">未选择</span>
+                        <span v-else class="font-mono text-sm text-neutral-400">未选择</span>
                     </div>
                     <textarea
                         v-model="msgContent"
                         placeholder="消息内容（1-500 字），发送后对方铃铛未读 +1"
                         maxlength="500"
                         rows="5"
-                        class="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y mb-3"
+                        class="np-input border-2 border-ink dark:border-paper mb-3 resize-y"
                     ></textarea>
                     <div class="flex items-center justify-between">
-                        <span class="text-xs text-gray-400">{{ msgContent.length }}/500</span>
+                        <span class="edition-label text-neutral-400 dark:text-neutral-500">{{ msgContent.length }}/500</span>
                         <button
                             @click="sendMessage"
                             :disabled="sending || selectedUserId === null || !msgContent.trim()"
-                            class="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                            class="np-btn np-btn-primary !min-h-[36px] !px-4"
                         >
                             {{ sending ? '发送中...' : '发送消息' }}
                         </button>
@@ -306,35 +355,38 @@ onMounted(() => {
                 </div>
 
                 <!-- 重置用户密码 -->
-                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-5 h-fit">
-                    <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-4">重置用户密码</h2>
-                    <div class="mb-3">
-                        <span class="text-xs text-gray-400">目标用户：</span>
-                        <span v-if="selectedUserId !== null" class="text-sm font-medium text-indigo-600 dark:text-indigo-400">
+                <div class="np-card p-6 h-fit animate-newsprint-in">
+                    <div class="flex items-center justify-between border-b-2 border-ink dark:border-paper pb-2 mb-5">
+                        <h2 class="font-serif text-xl font-bold tracking-tight">重置用户密码</h2>
+                        <span class="edition-label text-editorial">SECURITY DESK</span>
+                    </div>
+                    <div class="mb-3 flex items-center gap-2">
+                        <span class="edition-label text-neutral-500 dark:text-neutral-400">目标用户</span>
+                        <span v-if="selectedUserId !== null" class="font-mono text-sm font-semibold text-editorial">
                             {{ users.find((u) => u.id === selectedUserId)?.username || `#${selectedUserId}` }}
                         </span>
-                        <span v-else class="text-sm text-gray-400">未选择</span>
+                        <span v-else class="font-mono text-sm text-neutral-400">未选择</span>
                     </div>
                     <input
                         v-model="newPwd"
                         type="password"
                         placeholder="输入新密码"
-                        class="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-3"
+                        class="np-input mb-3"
                         autocomplete="new-password"
                     />
                     <!-- 成功提示 -->
-                    <div v-if="resetSuccess" class="mb-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 text-sm rounded-lg px-3 py-2">
-                        {{ resetSuccess }}
+                    <div v-if="resetSuccess" class="mb-3 border-2 border-ink text-ink dark:border-paper dark:text-paper text-sm px-4 py-3 font-mono">
+                        ✓ {{ resetSuccess }}
                     </div>
                     <!-- 错误提示 -->
-                    <div v-if="resetError" class="mb-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm rounded-lg px-3 py-2">
-                        {{ resetError }}
+                    <div v-if="resetError" class="mb-3 border-2 border-editorial text-editorial text-sm px-4 py-3 font-mono">
+                        ✗ {{ resetError }}
                     </div>
                     <div class="flex justify-end">
                         <button
                             @click="handleResetPassword"
                             :disabled="resetting || selectedUserId === null || !newPwd.trim()"
-                            class="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                            class="np-btn np-btn-primary !min-h-[36px] !px-4"
                         >
                             {{ resetting ? '重置中...' : '重置密码' }}
                         </button>

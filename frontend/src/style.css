@@ -1,51 +1,280 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,400;1,600&family=Lora:ital,wght@0,400;0,600;1,400&display=block');
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* ==================== 漂浮（原有） ==================== */
+/* ================================================================
+   Newsprint Design System — "All the News That's Fit to Print."
+   ================================================================ */
+
+/* ---------- Design Tokens ---------- */
+@theme {
+    /* Colors */
+    --color-paper: #F9F9F7;       /* Newsprint Off-White */
+    --color-ink: #111111;         /* Ink Black */
+    --color-divider: #E5E5E0;     /* Divider Grey */
+    --color-editorial: #CC0000;   /* Editorial Red */
+
+    /* Fonts */
+    --font-serif: 'Playfair Display', 'Songti SC', 'Times New Roman', serif;
+    --font-body: 'Lora', 'Songti SC', Georgia, serif;
+    --font-sans: 'Inter', 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+}
+
+/* ---------- Base ---------- */
+@layer base {
+    html {
+        scroll-behavior: smooth;
+    }
+    body {
+        @apply bg-paper text-ink font-sans antialiased;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' viewBox='0 0 4 4'%3E%3Cpath fill='%23111111' fill-opacity='0.04' d='M1 3h1v1H1V3zm2-2h1v1H3V1z'%3E%3C/path%3E%3C/svg%3E");
+    }
+    .dark body {
+        background-color: #17170f;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' viewBox='0 0 4 4'%3E%3Cpath fill='%23F9F9F7' fill-opacity='0.03' d='M1 3h1v1H1V3zm2-2h1v1H3V1z'%3E%3C/path%3E%3C/svg%3E");
+    }
+    h1, h2, h3, h4 {
+        @apply font-serif;
+    }
+}
+
+/* ---------- Utilities: Newsprint Core ---------- */
+
+/* Zero radius everywhere — the single most important rule */
+.sharp {
+    border-radius: 0px !important;
+}
+
+/* Hard offset shadow (newspaper cutout lift) */
+.hard-shadow {
+    box-shadow: 4px 4px 0px 0px #111111;
+}
+.dark .hard-shadow {
+    box-shadow: 4px 4px 0px 0px #F9F9F7;
+}
+.hard-shadow-hover {
+    transition: box-shadow 0.2s ease-out, transform 0.2s ease-out;
+}
+.hard-shadow-hover:hover {
+    box-shadow: 4px 4px 0px 0px #111111;
+    transform: translate(-2px, -2px);
+}
+.dark .hard-shadow-hover:hover {
+    box-shadow: 4px 4px 0px 0px #F9F9F7;
+}
+
+/* Fine graph-paper grid overlay for sections */
+.newsprint-texture {
+    position: relative;
+}
+.newsprint-texture::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+        linear-gradient(0deg, transparent 98%, rgba(0,0,0,0.03) 100%),
+        linear-gradient(90deg, transparent 98%, rgba(0,0,0,0.03) 100%);
+    background-size: 3px 3px;
+    pointer-events: none;
+    opacity: 0.5;
+}
+
+/* Halftone radial dot pattern (image placeholders) */
+.halftone {
+    background-image: radial-gradient(#111111 1px, transparent 1px);
+    background-size: 16px 16px;
+    opacity: 0.12;
+}
+.dark .halftone {
+    background-image: radial-gradient(#F9F9F7 1px, transparent 1px);
+}
+
+/* Ornamental serif divider */
+.ornament-divider {
+    @apply py-8 text-center font-serif text-2xl text-neutral-400 tracking-[1em] select-none;
+}
+
+/* Grayscale images with vintage sepia on hover */
+.newsprint-img {
+    filter: grayscale(1);
+    transition: filter 0.3s ease;
+}
+.newsprint-img:hover {
+    filter: grayscale(1) sepia(0.5);
+}
+
+/* ---------- Editorial Labels & Metadata ---------- */
+.edition-label {
+    @apply font-mono text-xs uppercase tracking-widest;
+}
+
+/* ---------- Buttons ---------- */
+.np-btn {
+    @apply inline-flex items-center justify-center min-h-[44px] px-6 font-sans text-xs font-semibold uppercase tracking-widest border border-ink transition-all duration-200 cursor-pointer select-none;
+    border-radius: 0px;
+}
+.np-btn:disabled {
+    @apply opacity-50 cursor-not-allowed;
+}
+
+/* Primary: solid black, inverts to white on hover */
+.np-btn-primary {
+    @apply bg-ink text-paper border border-transparent hover:bg-paper hover:text-ink hover:border-ink;
+}
+.dark .np-btn-primary {
+    @apply bg-paper text-ink hover:bg-transparent hover:text-paper hover:border-paper;
+}
+
+/* Secondary: outline, fills black on hover */
+.np-btn-secondary {
+    @apply bg-transparent text-ink border border-ink hover:bg-ink hover:text-paper;
+}
+.dark .np-btn-secondary {
+    @apply border-paper text-paper hover:bg-paper hover:text-ink;
+}
+
+/* Ghost: subtle grey hover */
+.np-btn-ghost {
+    @apply border-transparent text-ink hover:bg-neutral-100;
+}
+.dark .np-btn-ghost {
+    @apply text-paper hover:bg-neutral-700;
+}
+
+/* Link with red underline */
+.np-btn-link {
+    @apply text-ink underline-offset-4 decoration-2 decoration-editorial hover:underline font-sans;
+}
+.dark .np-btn-link {
+    @apply text-paper;
+}
+
+/* ---------- Cards ---------- */
+.np-card {
+    @apply border border-ink bg-paper;
+    border-radius: 0px;
+}
+.dark .np-card {
+    @apply bg-[#201f16] border-paper;
+}
+
+.np-card-hover {
+    transition: box-shadow 0.2s ease-out, transform 0.2s ease-out;
+}
+.np-card-hover:hover {
+    box-shadow: 4px 4px 0px 0px #111111;
+    transform: translate(-2px, -2px);
+}
+.dark .np-card-hover:hover {
+    box-shadow: 4px 4px 0px 0px #F9F9F7;
+}
+
+/* ---------- Inputs: transparent, bottom border only ---------- */
+.np-input {
+    @apply w-full bg-transparent border-b-2 border-ink px-3 py-2 font-mono text-sm text-ink placeholder-neutral-400 focus:outline-none focus:bg-[#F0F0F0] transition-colors duration-200;
+    border-radius: 0px;
+}
+.dark .np-input {
+    @apply border-paper text-paper placeholder-neutral-500 focus:bg-neutral-700;
+}
+
+/* ---------- Badges ---------- */
+.np-badge {
+    @apply inline-flex items-center px-2 py-0.5 font-mono text-[11px] uppercase tracking-wider border border-ink;
+    border-radius: 0px;
+}
+.np-badge-editorial {
+    @apply bg-editorial text-paper border-editorial;
+}
+.np-badge-outline {
+    @apply text-ink border-ink;
+}
+.dark .np-badge-outline {
+    @apply text-paper border-paper;
+}
+
+/* ---------- Table ---------- */
+.np-table th {
+    @apply font-sans text-xs uppercase tracking-widest text-left px-4 py-3 border-b-2 border-ink;
+}
+.np-table td {
+    @apply px-4 py-3 border-b border-divider text-sm;
+}
+.dark .np-table th,
+.dark .np-table td {
+    @apply border-paper/40;
+}
+
+/* ---------- Section header with heavy bottom rule ---------- */
+.np-section-title {
+    @apply font-serif text-2xl font-bold border-b-4 border-ink pb-2 mb-6 tracking-tight;
+}
+.dark .np-section-title {
+    @apply border-paper;
+}
+
+/* ---------- Hero headline ---------- */
+.np-hero {
+    @apply font-serif font-black text-5xl sm:text-6xl lg:text-7xl leading-[0.95] tracking-tighter;
+}
+
+/* ==================== 动画（保留原有，供测试页使用） ==================== */
 @keyframes float {
     0%, 100% { transform: translateY(0); }
     50% { transform: translateY(-10px); }
 }
 .animate-float { animation: float 4s ease-in-out infinite; }
 
-/* ==================== 淡入上浮 ==================== */
 @keyframes fade-up {
     from { opacity: 0; transform: translateY(24px); }
     to { opacity: 1; transform: translateY(0); }
 }
 .animate-fade-up { animation: fade-up 0.8s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
-/* ==================== 放大淡入（揭晓/数字跳动） ==================== */
 @keyframes scale-in {
     from { opacity: 0; transform: scale(0.7); }
     to { opacity: 1; transform: scale(1); }
 }
 .animate-scale-in { animation: scale-in 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
 
-/* ==================== 光效扫过（shimmer） ==================== */
 @keyframes shimmer {
     0% { transform: translateX(-150%) skewX(-12deg); }
     100% { transform: translateX(350%) skewX(-12deg); }
 }
 .animate-shimmer { animation: shimmer 2.8s ease-in-out infinite; }
 
-/* ==================== 背景呼吸流动（渐变平移） ==================== */
 @keyframes gradient-pan {
     0%, 100% { background-position: 0% 50%; }
     50% { background-position: 100% 50%; }
 }
 .animate-gradient-pan { background-size: 200% 200%; animation: gradient-pan 12s ease-in-out infinite; }
 
-/* ==================== 打字机光标闪烁 ==================== */
 @keyframes caret-blink {
     0%, 100% { opacity: 1; }
     50% { opacity: 0; }
 }
 .animate-caret { animation: caret-blink 1s steps(1) infinite; }
 
-/* ==================== 光晕呼吸（角落辉光） ==================== */
 @keyframes glow-pulse {
     0%, 100% { opacity: 0.5; transform: scale(1); }
     50% { opacity: 0.95; transform: scale(1.15); }
 }
 .animate-glow-pulse { animation: glow-pulse 6s ease-in-out infinite; }
+
+/* 报纸机械感入场（替代柔性过渡） */
+@keyframes newsprint-in {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.animate-newsprint-in { animation: newsprint-in 0.35s ease-out both; }
+
+/* 过渡覆盖：路由切换走报纸硬切换 */
+.fade-enter-active,
+.fade-leave-active {
+    transition: opacity 0.15s ease-out;
+}
+.fade-enter-from,
+.fade-leave-to {
+    opacity: 0;
+}

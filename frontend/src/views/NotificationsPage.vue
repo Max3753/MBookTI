@@ -64,46 +64,51 @@ onMounted(load)
 
 <template>
     <div>
-        <div class="flex items-center justify-between mb-4">
-            <h1 class="text-xl font-bold text-gray-800 dark:text-gray-100">通知</h1>
+        <div class="flex items-end justify-between mb-6">
+            <div>
+                <p class="edition-label text-neutral-400 dark:text-neutral-500 mb-2">读者来信 · Letters to the Editor</p>
+                <h1 class="font-serif text-4xl font-black tracking-tight border-b-4 border-editorial pb-1">通知</h1>
+            </div>
             <button
                 v-if="notifications.some((n) => !n.is_read)"
                 @click="readAll"
-                class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                class="np-btn-link text-xs cursor-pointer"
             >
                 全部已读
             </button>
         </div>
 
-        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
-            <div v-if="loading" class="p-10 text-center text-gray-400 text-sm">加载中...</div>
-            <div v-else-if="notifications.length === 0" class="p-10 text-center">
-                <div class="text-5xl mb-4">🔔</div>
-                <p class="text-gray-400">暂无通知</p>
-                <p class="text-xs text-gray-400 mt-1">书评获赞或收到管理员消息时会出现在这里</p>
+        <div class="np-card animate-newsprint-in">
+            <div v-if="loading" class="p-10 text-center">
+                <p class="edition-label text-neutral-400">加载中...</p>
             </div>
-            <div v-else class="divide-y divide-gray-100 dark:divide-gray-700">
+            <div v-else-if="notifications.length === 0" class="p-12 text-center">
+                <p class="font-serif text-3xl text-neutral-400">暂无通知</p>
+                <p class="edition-label text-neutral-400 dark:text-neutral-500 mt-4">书评获赞或收到管理员消息时会出现在这里</p>
+            </div>
+            <div v-else>
                 <button
                     v-for="n in notifications"
                     :key="n.id"
                     @click="openNotification(n)"
                     :disabled="markingId === n.id"
-                    class="w-full p-4 flex items-start gap-3 text-left transition-colors cursor-pointer disabled:opacity-60 hover:bg-gray-50 dark:hover:bg-gray-900/40"
+                    class="w-full p-4 flex items-start gap-4 text-left transition-colors cursor-pointer disabled:opacity-60 hover:bg-neutral-100 dark:hover:bg-neutral-800/60 border-b border-divider dark:border-paper/40 last:border-b-0"
                 >
-                    <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                        :class="n.type === 2
-                            ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-300'
-                            : 'bg-red-100 dark:bg-red-900/40 text-red-500 dark:text-red-400'">
+                    <div class="w-8 h-8 border border-ink dark:border-paper flex items-center justify-center font-mono text-xs shrink-0"
+                        :class="n.type === 2 ? 'text-editorial' : 'text-ink dark:text-paper'">
                         {{ n.type === 2 ? '管' : '赞' }}
                     </div>
                     <div class="flex-1 min-w-0">
                         <div class="flex items-center gap-2">
-                            <span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 shrink-0">{{ typeText(n.type) }}</span>
-                            <span v-if="!n.is_read" class="w-2 h-2 rounded-full bg-red-500 shrink-0"></span>
-                            <span class="text-xs text-gray-400 ml-auto shrink-0">{{ timeAgo(n.created_at) }}</span>
+                            <span class="np-badge shrink-0"
+                                :class="n.type === 2 ? 'np-badge-editorial' : 'np-badge-outline'">
+                                {{ typeText(n.type) }}
+                            </span>
+                            <span v-if="!n.is_read" class="w-2 h-2 bg-editorial shrink-0"></span>
+                            <span class="edition-label text-neutral-400 dark:text-neutral-500 ml-auto shrink-0">{{ timeAgo(n.created_at) }}</span>
                         </div>
-                        <p class="text-sm text-gray-700 dark:text-gray-300 mt-1.5 leading-relaxed">{{ n.content }}</p>
-                        <p v-if="n.related_book_id" class="text-xs text-indigo-500 dark:text-indigo-400 mt-1">点击查看相关书籍 →</p>
+                        <p class="text-sm text-neutral-700 dark:text-neutral-300 mt-1.5 leading-relaxed font-body">{{ n.content }}</p>
+                        <p v-if="n.related_book_id" class="np-btn-link text-xs mt-1 inline-block">点击查看相关书籍 →</p>
                     </div>
                 </button>
             </div>

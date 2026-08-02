@@ -37,76 +37,81 @@ function goReset() {
 </script>
 
 <template>
-    <div class="flex items-center justify-center min-h-[60vh]">
+    <div class="flex items-center justify-center min-h-[60vh] px-4 py-10">
         <div class="w-full max-w-md">
-          <button
-            @click="$router.push('/login')"
-            class="mb-3 flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors duration-200 cursor-pointer"
-          >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-            </svg>
-            返回登录
-          </button>
-          <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-8">
-            <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6 text-center">忘记密码</h1>
+            <button
+                @click="$router.push('/login')"
+                class="mb-4 flex items-center gap-1.5 text-sm np-btn-link cursor-pointer"
+            >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                </svg>
+                返回登录
+            </button>
+            <div class="np-card p-8 border-b-4 border-editorial animate-newsprint-in">
+                <!-- 报头 -->
+                <div class="flex items-center justify-between border-b-2 border-ink pb-3 mb-6">
+                    <span class="edition-label text-neutral-500 dark:text-neutral-400">MBookTI · 读者服务部</span>
+                    <span class="edition-label text-editorial">FORM · 找回栏</span>
+                </div>
+                <h1 class="font-serif text-3xl font-black text-center tracking-tight mb-8">忘记密码</h1>
 
-            <div v-if="success" class="space-y-5">
-                <!-- 成功提示 -->
-                <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 text-sm rounded-lg px-4 py-3">
-                    若该邮箱已注册，将收到重置邮件
+                <div v-if="success" class="space-y-6">
+                    <!-- 成功提示 -->
+                    <div class="border-2 border-ink text-ink dark:text-paper dark:border-paper text-sm px-4 py-3">
+                        ✓ 若该邮箱已注册，将收到重置邮件
+                    </div>
+
+                    <!-- dev 模式：响应携带 reset_token 时展示开发提示框 -->
+                    <div v-if="resetToken" class="border-2 border-ink px-4 py-3 space-y-3 dark:border-paper">
+                        <p class="edition-label text-neutral-600 dark:text-neutral-400">
+                            【开发模式】当前环境未配置邮件服务，系统返回了重置 token（仅开发环境可见，生产环境不会返回）：
+                        </p>
+                        <code class="block text-xs font-mono text-ink dark:text-paper border border-ink dark:border-paper px-3 py-2 break-all select-all">{{ resetToken }}</code>
+                        <button
+                            @click="goReset"
+                            class="np-btn np-btn-primary w-full"
+                        >
+                            下一步
+                        </button>
+                    </div>
                 </div>
 
-                <!-- dev 模式：响应携带 reset_token 时展示开发提示框 -->
-                <div v-if="resetToken" class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg px-4 py-3 space-y-3">
-                    <p class="text-xs text-yellow-700 dark:text-yellow-400">
-                        【开发模式】当前环境未配置邮件服务，系统返回了重置 token（仅开发环境可见，生产环境不会返回）：
-                    </p>
-                    <code class="block text-xs text-yellow-800 dark:text-yellow-300 bg-white dark:bg-gray-800 border border-yellow-200 dark:border-yellow-800 rounded px-3 py-2 break-all select-all">{{ resetToken }}</code>
+                <form v-else @submit.prevent="handleForgot" class="space-y-6">
+                    <!-- 错误提示 -->
+                    <div v-if="error" class="border-2 border-editorial text-editorial text-sm px-4 py-3">
+                        ✗ {{ error }}
+                    </div>
+
+                    <!-- 邮箱 -->
+                    <div>
+                        <label class="block font-mono text-xs uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-1.5">邮箱</label>
+                        <input
+                            v-model="email"
+                            type="email"
+                            placeholder="请输入注册邮箱"
+                            class="np-input"
+                            autocomplete="email"
+                        />
+                    </div>
+
+                    <!-- 提交按钮 -->
                     <button
-                        @click="goReset"
-                        class="w-full bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400 text-white rounded-lg px-6 py-2.5 font-medium transition-all duration-200 cursor-pointer"
+                        type="submit"
+                        :disabled="loading"
+                        class="np-btn np-btn-primary w-full"
                     >
-                        下一步
+                        <div v-if="loading" class="w-4 h-4 border-2 border-current border-t-transparent animate-spin"></div>
+                        {{ loading ? '发送中...' : '发送重置邮件' }}
                     </button>
-                </div>
+
+                    <!-- 登录链接 -->
+                    <p class="text-center text-sm text-neutral-500 dark:text-neutral-400">
+                        想起密码了？
+                        <router-link to="/login" class="np-btn-link font-medium">返回登录</router-link>
+                    </p>
+                </form>
             </div>
-
-            <form v-else @submit.prevent="handleForgot" class="space-y-5">
-                <!-- 错误提示 -->
-                <div v-if="error" class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm rounded-lg px-4 py-3">
-                    {{ error }}
-                </div>
-
-                <!-- 邮箱 -->
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">邮箱</label>
-                    <input
-                        v-model="email"
-                        type="email"
-                        placeholder="请输入注册邮箱"
-                        class="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2.5 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all duration-200"
-                        autocomplete="email"
-                    />
-                </div>
-
-                <!-- 提交按钮 -->
-                <button
-                    type="submit"
-                    :disabled="loading"
-                    class="w-full bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400 text-white rounded-lg px-6 py-2.5 font-medium transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                    <div v-if="loading" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    {{ loading ? '发送中...' : '发送重置邮件' }}
-                </button>
-
-                <!-- 登录链接 -->
-                <p class="text-center text-sm text-gray-500 dark:text-gray-400">
-                    想起密码了？
-                    <router-link to="/login" class="text-indigo-600 dark:text-indigo-400 hover:underline font-medium">返回登录</router-link>
-                </p>
-            </form>
-        </div>
         </div>
     </div>
 </template>

@@ -206,12 +206,12 @@ onMounted(async () => {
     <div>
         <!-- 加载骨架 -->
         <div v-if="loading" class="animate-pulse space-y-6">
-            <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm">
+            <div class="np-card p-6">
                 <div class="flex items-center gap-4">
-                    <div class="w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-700"></div>
+                    <div class="w-16 h-16 border border-ink dark:border-paper bg-neutral-200 dark:bg-neutral-700"></div>
                     <div class="flex-1 space-y-2">
-                        <div class="h-5 bg-gray-200 dark:bg-gray-700 rounded w-1/3"></div>
-                        <div class="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
+                        <div class="h-5 bg-neutral-200 dark:bg-neutral-700 w-1/3"></div>
+                        <div class="h-3 bg-neutral-200 dark:bg-neutral-700 w-1/2"></div>
                     </div>
                 </div>
             </div>
@@ -219,76 +219,72 @@ onMounted(async () => {
 
         <!-- 加载失败 -->
         <div v-else-if="error" class="text-center py-20">
-            <p class="text-gray-400 mb-3">{{ error }}</p>
-            <button @click="reloadPage" class="text-sm text-indigo-600 hover:underline cursor-pointer">重试</button>
+            <p class="font-serif text-2xl text-neutral-400 mb-4">{{ error }}</p>
+            <button @click="reloadPage" class="np-btn-link text-sm cursor-pointer">重试</button>
         </div>
 
         <div v-else-if="profile" class="space-y-6">
-            <!-- 头部卡片 -->
-            <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm">
-                <div class="flex items-start gap-4">
-                    <!-- 默认头像 -->
-                    <div class="w-16 h-16 rounded-full text-white flex items-center justify-center text-2xl font-bold shrink-0" :class="avatarColor">
+            <!-- 头部卡片：读者档案 -->
+            <div class="np-card p-6 animate-newsprint-in">
+                <div class="flex items-start gap-5">
+                    <!-- 默认头像：方形墨印 -->
+                    <div class="w-16 h-16 shrink-0 flex items-center justify-center text-2xl font-serif font-bold text-white border border-ink dark:border-paper"
+                        :class="avatarColor">
                         {{ (profile.username || '?')[0].toUpperCase() }}
                     </div>
                     <div class="flex-1 min-w-0">
-                        <div class="flex items-center gap-2">
-                            <h1 class="text-xl font-bold text-gray-800 dark:text-gray-100 truncate">{{ profile.username }}</h1>
-                            <span v-if="profile.mbti_type_code"
-                                class="px-2 py-0.5 text-xs rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-300 shrink-0">
+                        <div class="flex items-center gap-3 flex-wrap">
+                            <h1 class="font-serif text-3xl font-bold tracking-tight truncate">{{ profile.username }}</h1>
+                            <span v-if="profile.mbti_type_code" class="np-badge np-badge-editorial shrink-0">
                                 {{ profile.mbti_type_code }} {{ profile.mbti_type_name }}
                             </span>
                         </div>
-                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">{{ profile.email }}</p>
-                        <p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">注册于 {{ new Date(profile.created_at).toLocaleDateString('zh-CN') }}</p>
+                        <p class="edition-label text-neutral-500 dark:text-neutral-400 mt-2">{{ profile.email }}</p>
+                        <p class="edition-label text-neutral-400 dark:text-neutral-500 mt-1">
+                            注册于 {{ new Date(profile.created_at).toLocaleDateString('zh-CN') }}
+                        </p>
                     </div>
                     <div class="flex gap-2 shrink-0">
-                        <button @click="openEdit"
-                            class="px-3 py-1.5 text-xs rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition-all duration-200 cursor-pointer">
-                            编辑资料
-                        </button>
-                        <button @click="openPw"
-                            class="px-3 py-1.5 text-xs rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200 cursor-pointer">
-                            改密码
-                        </button>
+                        <button @click="openEdit" class="np-btn np-btn-secondary px-4 cursor-pointer">编辑资料</button>
+                        <button @click="openPw" class="np-btn np-btn-primary px-4 cursor-pointer">改密码</button>
                     </div>
                 </div>
 
-                <!-- 统计徽章 -->
-                <div class="grid grid-cols-3 gap-3 mt-5">
-                    <div class="text-center py-3 rounded-xl bg-gray-50 dark:bg-gray-900/50">
-                        <div class="text-2xl font-bold text-gray-800 dark:text-gray-100">{{ profile.stats.comment_count }}</div>
-                        <div class="text-xs text-gray-400 mt-0.5">书评</div>
+                <!-- 统计徽章：报纸数据栏 -->
+                <div class="grid grid-cols-3 border border-ink dark:border-paper mt-6">
+                    <div class="py-4 text-center border-r border-ink dark:border-paper">
+                        <div class="font-mono text-3xl font-medium leading-none">{{ profile.stats.comment_count }}</div>
+                        <div class="edition-label text-neutral-500 dark:text-neutral-400 mt-2">书评</div>
                     </div>
-                    <div class="text-center py-3 rounded-xl bg-gray-50 dark:bg-gray-900/50">
-                        <div class="text-2xl font-bold text-gray-800 dark:text-gray-100">{{ profile.stats.favorite_count }}</div>
-                        <div class="text-xs text-gray-400 mt-0.5">收藏</div>
+                    <div class="py-4 text-center border-r border-ink dark:border-paper">
+                        <div class="font-mono text-3xl font-medium leading-none">{{ profile.stats.favorite_count }}</div>
+                        <div class="edition-label text-neutral-500 dark:text-neutral-400 mt-2">收藏</div>
                     </div>
-                    <div class="text-center py-3 rounded-xl bg-gray-50 dark:bg-gray-900/50">
-                        <div class="text-2xl font-bold text-gray-800 dark:text-gray-100">{{ profile.stats.like_received }}</div>
-                        <div class="text-xs text-gray-400 mt-0.5">获赞</div>
+                    <div class="py-4 text-center">
+                        <div class="font-mono text-3xl font-medium leading-none">{{ profile.stats.like_received }}</div>
+                        <div class="edition-label text-neutral-500 dark:text-neutral-400 mt-2">获赞</div>
                     </div>
                 </div>
 
                 <!-- 编辑资料弹窗 -->
                 <div v-if="editing" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" @click.self="editing = false">
-                    <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-sm shadow-xl">
-                        <h3 class="text-lg font-bold text-gray-800 dark:text-gray-100 mb-4">编辑资料</h3>
-                        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">用户名</label>
-                        <input v-model="editUsername" type="text"
-                            class="w-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 rounded-lg px-3 py-2 mb-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
-                        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">我的 MBTI 类型</label>
-                        <select v-model="editMbtiId"
-                            class="w-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 rounded-lg px-3 py-2 mb-4 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                    <div class="np-card p-6 w-full max-w-sm animate-newsprint-in">
+                        <h3 class="font-serif text-xl font-bold border-b-4 border-ink dark:border-paper pb-2 mb-5">编辑资料</h3>
+                        <label class="edition-label text-neutral-500 dark:text-neutral-400 block mb-1">用户名</label>
+                        <input v-model="editUsername" type="text" class="np-input mb-4" />
+                        <label class="edition-label text-neutral-500 dark:text-neutral-400 block mb-1">我的 MBTI 类型</label>
+                        <select v-model="editMbtiId" class="np-input cursor-pointer mb-5">
                             <option :value="null">未设置</option>
                             <option v-for="mt in mbtiTypes" :key="mt.id" :value="mt.id">{{ mt.code }} {{ mt.name }}</option>
                         </select>
-                        <p v-if="saveMsg" class="text-xs mb-3" :class="saveMsg === '已保存' ? 'text-emerald-500' : 'text-red-500'">{{ saveMsg }}</p>
+                        <p v-if="saveMsg" class="font-mono text-xs mb-3"
+                            :class="saveMsg === '已保存' ? 'text-neutral-500 dark:text-neutral-400' : 'text-editorial'">
+                            {{ saveMsg }}
+                        </p>
                         <div class="flex gap-2 justify-end">
-                            <button @click="editing = false"
-                                class="px-4 py-2 text-xs rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 cursor-pointer">取消</button>
+                            <button @click="editing = false" class="np-btn np-btn-secondary px-5 cursor-pointer">取消</button>
                             <button @click="saveProfile" :disabled="saving"
-                                class="px-4 py-2 text-xs rounded-lg bg-indigo-600 text-white disabled:opacity-50 cursor-pointer">
+                                class="np-btn np-btn-primary px-5 cursor-pointer">
                                 {{ saving ? '保存中...' : '保存' }}
                             </button>
                         </div>
@@ -297,20 +293,16 @@ onMounted(async () => {
 
                 <!-- 改密码弹窗 -->
                 <div v-if="pwOpen" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" @click.self="pwOpen = false">
-                    <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-sm shadow-xl">
-                        <h3 class="text-lg font-bold text-gray-800 dark:text-gray-100 mb-4">修改密码</h3>
-                        <input v-model="oldPassword" type="password" placeholder="旧密码"
-                            class="w-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 rounded-lg px-3 py-2 mb-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
-                        <input v-model="newPassword" type="password" placeholder="新密码"
-                            class="w-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 rounded-lg px-3 py-2 mb-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
-                        <input v-model="confirmPassword" type="password" placeholder="确认新密码"
-                            class="w-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 rounded-lg px-3 py-2 mb-4 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
-                        <p v-if="pwError" class="text-xs text-red-500 mb-3">{{ pwError }}</p>
+                    <div class="np-card p-6 w-full max-w-sm animate-newsprint-in">
+                        <h3 class="font-serif text-xl font-bold border-b-4 border-ink dark:border-paper pb-2 mb-5">修改密码</h3>
+                        <input v-model="oldPassword" type="password" placeholder="旧密码" class="np-input mb-4" />
+                        <input v-model="newPassword" type="password" placeholder="新密码" class="np-input mb-4" />
+                        <input v-model="confirmPassword" type="password" placeholder="确认新密码" class="np-input mb-5" />
+                        <p v-if="pwError" class="font-mono text-xs text-editorial mb-3">{{ pwError }}</p>
                         <div class="flex gap-2 justify-end">
-                            <button @click="pwOpen = false"
-                                class="px-4 py-2 text-xs rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 cursor-pointer">取消</button>
+                            <button @click="pwOpen = false" class="np-btn np-btn-secondary px-5 cursor-pointer">取消</button>
                             <button @click="submitPassword" :disabled="pwSubmitting"
-                                class="px-4 py-2 text-xs rounded-lg bg-indigo-600 text-white disabled:opacity-50 cursor-pointer">
+                                class="np-btn np-btn-primary px-5 cursor-pointer">
                                 {{ pwSubmitting ? '提交中...' : '确认修改' }}
                             </button>
                         </div>
@@ -318,46 +310,49 @@ onMounted(async () => {
                 </div>
             </div>
 
-            <!-- Tabs -->
-            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
-                <div class="flex border-b border-gray-100 dark:border-gray-700">
+            <!-- Tabs：报纸栏目切换 -->
+            <div class="np-card animate-newsprint-in">
+                <div class="flex border-b-2 border-ink dark:border-paper">
                     <button @click="switchTab('comments')"
-                        class="flex-1 py-3 text-sm font-medium transition-colors cursor-pointer"
+                        class="flex-1 py-3 text-sm font-sans uppercase tracking-widest border-b-4 -mb-0.5 transition-colors cursor-pointer"
                         :class="activeTab === 'comments'
-                            ? 'text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 dark:border-indigo-400'
-                            : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'">
+                            ? 'border-editorial text-ink dark:text-paper font-semibold'
+                            : 'border-transparent text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300'">
                         我的书评 ({{ profile.stats.comment_count }})
                     </button>
                     <button @click="switchTab('favorites')"
-                        class="flex-1 py-3 text-sm font-medium transition-colors cursor-pointer"
+                        class="flex-1 py-3 text-sm font-sans uppercase tracking-widest border-b-4 -mb-0.5 transition-colors cursor-pointer"
                         :class="activeTab === 'favorites'
-                            ? 'text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 dark:border-indigo-400'
-                            : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'">
+                            ? 'border-editorial text-ink dark:text-paper font-semibold'
+                            : 'border-transparent text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300'">
                         我的收藏 ({{ profile.stats.favorite_count }})
                     </button>
                 </div>
 
                 <!-- 书评 Tab -->
-                <div v-if="activeTab === 'comments'" class="divide-y divide-gray-100 dark:divide-gray-700">
-                    <div v-if="commentsLoading" class="p-6 text-center text-gray-400 text-sm">加载中...</div>
-                    <div v-else-if="comments.length === 0" class="p-10 text-center text-gray-400 text-sm">
-                        还没有书评，去书籍详情页写第一条吧
+                <div v-if="activeTab === 'comments'">
+                    <div v-if="commentsLoading" class="p-6 text-center edition-label text-neutral-400">加载中...</div>
+                    <div v-else-if="comments.length === 0" class="p-12 text-center">
+                        <p class="font-serif text-2xl text-neutral-400">暂无书评</p>
+                        <p class="edition-label text-neutral-400 dark:text-neutral-500 mt-3">去书籍详情页写下第一条吧</p>
                     </div>
-                    <div v-for="c in comments" :key="c.id" class="p-4 flex gap-3 hover:bg-gray-50 dark:hover:bg-gray-900/40 transition-colors">
-                        <router-link :to="`/books/${c.book_id}`" class="w-12 h-16 rounded overflow-hidden bg-gray-100 dark:bg-gray-700 shrink-0">
-                            <img v-if="c.book_cover_url" :src="proxyUrl(c.book_cover_url)" :alt="c.book_title" class="w-full h-full object-cover" />
+                    <div v-for="c in comments" :key="c.id"
+                        class="p-4 flex gap-3 border-b border-divider dark:border-paper/40 last:border-b-0 hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition-colors">
+                        <router-link :to="`/books/${c.book_id}`"
+                            class="w-12 h-16 border border-ink dark:border-paper overflow-hidden shrink-0 bg-neutral-100 dark:bg-neutral-800">
+                            <img v-if="c.book_cover_url" :src="proxyUrl(c.book_cover_url)" :alt="c.book_title"
+                                class="w-full h-full object-cover newsprint-img" />
+                            <div v-else class="w-full h-full halftone"></div>
                         </router-link>
                         <div class="flex-1 min-w-0">
-                            <router-link :to="`/books/${c.book_id}`" class="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline">
-                                《{{ c.book_title }}》
-                            </router-link>
-                            <p class="text-sm text-gray-700 dark:text-gray-300 mt-1 line-clamp-2">{{ c.content }}</p>
-                            <p class="text-xs text-gray-400 mt-1.5">
+                            <router-link :to="`/books/${c.book_id}`" class="np-btn-link text-sm">《{{ c.book_title }}》</router-link>
+                            <p class="text-sm text-neutral-700 dark:text-neutral-300 mt-1 line-clamp-2 font-body">{{ c.content }}</p>
+                            <p class="edition-label text-neutral-400 dark:text-neutral-500 mt-1.5">
                                 {{ new Date(c.created_at).toLocaleString('zh-CN') }} · ♥ {{ c.likes_count }}
                             </p>
                         </div>
                         <button @click="removeComment(c.id)" :disabled="deletingId === c.id"
-                            class="text-xs text-red-500 hover:text-red-600 disabled:opacity-50 shrink-0 cursor-pointer">
+                            class="text-xs font-sans text-editorial hover:underline underline-offset-4 disabled:opacity-50 shrink-0 cursor-pointer">
                             {{ deletingId === c.id ? '删除中...' : '删除' }}
                         </button>
                     </div>
@@ -365,18 +360,21 @@ onMounted(async () => {
 
                 <!-- 收藏 Tab -->
                 <div v-else class="p-4">
-                    <div v-if="favoritesLoading" class="p-6 text-center text-gray-400 text-sm">加载中...</div>
-                    <div v-else-if="favorites.length === 0" class="p-10 text-center text-gray-400 text-sm">
-                        还没有收藏的书籍，去详情页点 ♡ 收藏吧
+                    <div v-if="favoritesLoading" class="p-6 text-center edition-label text-neutral-400">加载中...</div>
+                    <div v-else-if="favorites.length === 0" class="p-12 text-center">
+                        <p class="font-serif text-2xl text-neutral-400">暂无收藏</p>
+                        <p class="edition-label text-neutral-400 dark:text-neutral-500 mt-3">去书籍详情页点 ♡ 收藏吧</p>
                     </div>
                     <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                         <router-link v-for="b in favorites" :key="b.id" :to="`/books/${b.id}`"
-                            class="group bg-gray-50 dark:bg-gray-900/50 rounded-xl p-3 hover:shadow-md transition-all duration-200">
-                            <div class="w-full h-32 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700 mb-2">
-                                <img v-if="b.cover_url" :src="proxyUrl(b.cover_url)" :alt="b.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                            class="np-card np-card-hover p-3 block">
+                            <div class="w-full h-32 border border-ink dark:border-paper overflow-hidden bg-neutral-100 dark:bg-neutral-800 mb-2">
+                                <img v-if="b.cover_url" :src="proxyUrl(b.cover_url)" :alt="b.title"
+                                    class="w-full h-full object-cover newsprint-img" />
+                                <div v-else class="w-full h-full halftone"></div>
                             </div>
-                            <div class="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">{{ b.title }}</div>
-                            <div class="text-xs text-gray-400 mt-0.5 truncate">{{ b.author }}</div>
+                            <div class="text-sm font-medium font-serif truncate text-ink dark:text-paper">{{ b.title }}</div>
+                            <div class="edition-label text-neutral-400 dark:text-neutral-500 mt-0.5 truncate">{{ b.author }}</div>
                         </router-link>
                     </div>
                 </div>

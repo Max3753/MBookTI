@@ -67,151 +67,170 @@ function proxyUrl(url: string): string {
 </script>
 
 <template>
-    <div>
+    <div class="newsprint-texture">
     <!-- 返回按钮（始终可见） -->
     <button
       @click="$router.push('/')"
-      class="mb-4 flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors duration-200 cursor-pointer"
+      class="mb-6 flex items-center gap-1.5 np-btn np-btn-ghost px-3 text-sm cursor-pointer"
     >
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
       </svg>
-      返回
+      <span class="edition-label">返回 · BACK</span>
     </button>
 
-    <!-- 骨架屏加载 -->
+    <!-- 骨架屏加载：报纸灰块 + 硬边框 -->
     <div v-if="loading" class="animate-pulse space-y-6">
-        <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm">
-            <div class="flex gap-3 items-center mb-4">
-                <div class="h-8 w-16 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
-                <div class="h-6 w-20 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
-                <div class="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
+        <div class="np-card p-6">
+            <div class="flex gap-4 items-center mb-6">
+                <div class="w-16 h-16 bg-divider border border-ink/10"></div>
+                <div class="flex-1 space-y-3">
+                    <div class="h-8 w-2/3 bg-divider border border-ink/10"></div>
+                    <div class="h-4 w-1/3 bg-divider border border-ink/10"></div>
+                </div>
             </div>
-            <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
-            <div class="flex gap-2 mt-4">
-                <div class="h-6 w-16 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
-                <div class="h-6 w-20 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
-                <div class="h-6 w-14 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+            <div class="h-4 w-3/4 bg-divider border border-ink/10"></div>
+            <div class="flex gap-2 mt-5">
+                <div class="h-6 w-16 bg-divider border border-ink/10"></div>
+                <div class="h-6 w-20 bg-divider border border-ink/10"></div>
+                <div class="h-6 w-14 bg-divider border border-ink/10"></div>
             </div>
         </div>
-        <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-            <div class="flex gap-3 items-start mb-3">
-                <div class="w-1.5 h-16 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
-                <div class="flex-1">
-                    <div class="h-5 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mb-2"></div>
-                    <div class="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-3"></div>
-                    <div class="h-3 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
-                    <div class="h-3 bg-gray-200 dark:bg-gray-700 rounded w-2/3 mt-1"></div>
+        <div class="np-card p-6">
+            <div class="flex gap-4 items-start">
+                <div class="w-1.5 h-20 bg-editorial shrink-0"></div>
+                <div class="flex-1 space-y-3">
+                    <div class="h-5 w-1/2 bg-divider border border-ink/10"></div>
+                    <div class="h-3 w-1/4 bg-divider border border-ink/10"></div>
+                    <div class="h-3 w-full bg-divider border border-ink/10"></div>
+                    <div class="h-3 w-2/3 bg-divider border border-ink/10"></div>
                 </div>
             </div>
         </div>
-        <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-            <div class="flex gap-3 items-start mb-3">
-                <div class="w-1.5 h-16 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
-                <div class="flex-1">
-                    <div class="h-5 bg-gray-200 dark:bg-gray-700 rounded w-2/3 mb-2"></div>
-                    <div class="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/5 mb-3"></div>
-                    <div class="h-3 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
-                    <div class="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mt-1"></div>
+        <div class="np-card p-6">
+            <div class="flex gap-4 items-start">
+                <div class="w-1.5 h-20 bg-editorial shrink-0"></div>
+                <div class="flex-1 space-y-3">
+                    <div class="h-5 w-2/3 bg-divider border border-ink/10"></div>
+                    <div class="h-3 w-1/5 bg-divider border border-ink/10"></div>
+                    <div class="h-3 w-3/4 bg-divider border border-ink/10"></div>
+                    <div class="h-3 w-1/2 bg-divider border border-ink/10"></div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div v-else-if="error && !mbtiType" class="text-center py-20 text-red-400">{{ error }}</div>
+    <div v-else-if="error && !mbtiType" class="text-center py-20">
+        <div class="mx-auto max-w-md np-card px-8 py-10">
+            <div class="edition-label text-editorial mb-3">发行中断 · PRESS HALT</div>
+            <p class="font-serif text-2xl font-bold text-ink dark:text-paper">{{ error }}</p>
+        </div>
+    </div>
 
     <div v-else>
 
-        <!-- MBTI 类型头部 -->
-        <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
-            <div class="flex items-center gap-4 mb-3">
-                <div class="w-16 h-16 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center overflow-hidden shrink-0">
+        <!-- 报头：人物专访版 -->
+        <div class="np-card p-6 sm:p-8 mb-8 animate-fade-up">
+            <div class="flex flex-col sm:flex-row sm:items-start gap-6">
+                <div class="w-20 h-20 shrink-0 border border-ink dark:border-paper bg-divider flex items-center justify-center overflow-hidden">
                     <img
                     :src="getImage(code)"
                     :alt="code"
-                    class="w-full h-full object-cover"
+                    class="w-full h-full object-cover newsprint-img"
                     @error="(e: any) => e.target.style.display = 'none'"
                     >
                 </div>
-                <div class="flex items-center gap-3 flex-wrap">
-                    <span class="text-4xl font-bold text-indigo-600 dark:text-indigo-400">{{ mbtiType?.code }}</span>
-                <span class="text-xl text-gray-800 dark:text-gray-100 font-medium">{{ mbtiType?.name }}</span>
-                                    <span class="text-sm text-gray-400 dark:text-gray-500 hidden sm:inline">{{ mbtiType?.name_en }}</span>
+                <div class="flex-1 min-w-0">
+                    <div class="edition-label text-editorial mb-2">人物专访 · PERSONALITY PROFILE</div>
+                    <div class="flex items-baseline gap-4 flex-wrap">
+                        <span class="font-serif font-black text-6xl sm:text-7xl leading-none tracking-tighter text-ink dark:text-paper">{{ mbtiType?.code }}</span>
+                        <span class="font-serif text-2xl sm:text-3xl font-bold text-ink dark:text-paper">{{ mbtiType?.name }}</span>
+                        <span class="edition-label text-neutral-400 hidden sm:inline">{{ mbtiType?.name_en }}</span>
+                    </div>
+                    <p class="mt-4 font-serif text-sm sm:text-base text-neutral-600 dark:text-neutral-300 leading-relaxed text-justify">{{ mbtiType?.description }}</p>
+                    <div class="flex flex-wrap gap-2 mt-5 border-t border-ink dark:border-paper pt-4">
+                        <span
+                        v-for="trait in mbtiType?.traits || []"
+                        :key="trait"
+                        class="np-badge np-badge-outline">
+                        {{ trait }}
+                        </span>
+                    </div>
                 </div>
             </div>
-            <p class="text-gray-500 dark:text-gray-400 text-sm leading-relaxed">{{ mbtiType?.description }}</p>
-            <div class="flex flex-wrap gap-2 mt-4">
-                <span
-                v-for="trait in mbtiType?.traits || []"
-                :key="trait"
-                class="px-3 py-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-xs rounded-full font-medium">
-                {{ trait }}
+        </div>
+
+        <!-- 推荐书单：书评版面 -->
+        <div class="mb-6 animate-fade-up">
+            <h2 class="np-section-title">{{ t.recommend_title }}</h2>
+            <div class="flex justify-end">
+                <button
+                @click="handleGenerate"
+                :disabled="generating"
+                class="np-btn np-btn-primary cursor-pointer">
+                <span v-if="generating" class="flex items-center gap-2">
+                    <div class="animate-spin w-4 h-4 border-2 border-paper border-t-transparent"></div>
+                    {{ t.generating }}
                 </span>
+                <span v-else>{{ t.ai_generate }}</span>
+                </button>
             </div>
         </div>
 
-        <!-- 推荐书单 -->
-        <div class="mb-4 flex items-center justify-between">
-            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">{{ t.recommend_title }}</h2>
-            <button
-            @click="handleGenerate"
-            :disabled="generating"
-            class="px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-all duration-200 shadow-sm hover:shadow-md active:scale-95 cursor-pointer">
-            <span v-if="generating" class="flex items-center gap-2">
-                <div class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
-                {{ t.generating }}
-            </span>
-            <span v-else>{{ t.ai_generate }}</span>
-            </button>
+        <div v-if="error" class="border border-editorial bg-paper text-editorial text-sm px-4 py-3 mb-6 flex items-center gap-3">
+            <span class="np-badge np-badge-editorial leading-none">号外</span>
+            <span>{{ error }}</span>
         </div>
 
-        <div v-if="error" class="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-sm rounded-xl px-4 py-3 mb-4">{{ error }}</div>
-
-        <!-- 推荐列表 -->
-        <div v-if="recommendations.length > 0" class="space-y-4">
+        <!-- 推荐列表：书评条目 -->
+        <div v-if="recommendations.length > 0" class="space-y-6">
             <div
             v-for="(item, index) in recommendations"
             :key="item.id"
-            class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-all duration-300"
+            class="np-card p-6 np-card-hover"
             :style="{ animationDelay: `${index * 0.1}s` }"
             style="animation: fadeInUp 0.5s ease-out both"
             >
-            <div class="flex items-start gap-4">
-                <div class="w-1.5 h-full min-h-[4rem] rounded-full bg-indigo-100 dark:bg-indigo-800 shrink-0 mt-1"></div>
+            <div class="flex items-start gap-5">
+                <div class="hidden sm:flex w-10 shrink-0 flex-col items-center pt-1">
+                    <span class="font-serif font-black text-3xl leading-none text-editorial">{{ String(index + 1).padStart(2, '0') }}</span>
+                    <span class="edition-label text-neutral-400 mt-1">BOOK</span>
+                </div>
                 <!--封面图：有 URL 显示图片；加载失败时隐藏；无 URL 显示展位块；点击进书籍详情页-->
                 <router-link :to="`/books/${item.book.id}`" class="shrink-0">
                     <img
                         v-if="item.book.cover_url && !item.coverFailed"
                         :src="proxyUrl(item.book.cover_url)"
                         :alt="item.book.title"
-                        class="w-20 h-28 object-cover rounded-lg shrink-0 hover:opacity-90 transition-opacity duration-200"
+                        class="w-20 h-28 object-cover shrink-0 hover:opacity-90 transition-opacity duration-200 newsprint-img border border-ink/10"
                         @error="item.coverFailed = true"
                     >
                     <div
                         v-else
-                        class="w-20 h-28 shrink-0 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-2xl font-bold text-indigo-500 dark:text-indigo-400"
+                        class="w-20 h-28 shrink-0 relative flex items-center justify-center bg-divider border border-ink/10 overflow-hidden"
                     >
-                        {{ (item.book.title || '书').charAt(0) }}
+                        <span class="halftone absolute inset-0"></span>
+                        <span class="relative font-serif text-3xl font-bold text-neutral-500">{{ (item.book.title || '书').charAt(0) }}</span>
                     </div>
                 </router-link>
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 mb-1">
                         <router-link
                             :to="`/books/${item.book.id}`"
-                            class="hover:underline"
+                            class="hover:underline decoration-editorial decoration-2 underline-offset-4"
                         >
-                            <h3 class="font-semibold text-gray-800 dark:text-gray-100 text-lg">{{ item.book.title }}</h3>
+                            <h3 class="font-serif font-bold text-ink dark:text-paper text-lg">{{ item.book.title }}</h3>
                         </router-link>
-                        <span v-if="item.relevance_score" class="text-xs bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full font-medium shrink-0">
+                        <span v-if="item.relevance_score" class="np-badge np-badge-editorial leading-none shrink-0">
                             {{ item.relevance_score }}{{ t.score }}
                         </span>
                     </div>
-                    <p class="text-sm text-gray-500 dark:text-gray-400">{{ item.book.author }}</p>
-                    <p v-if="item.book.genre" class="text-xs text-indigo-500 dark:text-indigo-400 mt-2 inline-block px-2 py-0.5 bg-indigo-50 dark:bg-indigo-900/30 rounded-full">
+                    <p class="edition-label text-neutral-500">{{ item.book.author }}</p>
+                    <p v-if="item.book.genre" class="mt-2 inline-block np-badge np-badge-outline">
                         {{ item.book.genre }}
                     </p>
-                    <div class="mt-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
-                        <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed italic">
+                    <div class="mt-4 p-4 bg-paper border-l-4 border-editorial">
+                        <p class="text-sm font-serif text-neutral-600 dark:text-neutral-300 leading-relaxed italic text-justify">
                             "{{ item.reasoning }}"
                         </p>
                     </div>
@@ -221,9 +240,11 @@ function proxyUrl(url: string): string {
         </div>
 
         <div v-else-if="!generating" class="text-center py-20">
-            <div class="text-5xl mb-4">📖</div>
-            <p class="text-gray-400 dark:text-gray-500 text-lg">{{ t.no_recommend }}</p>
-            <p class="text-gray-400 dark:text-gray-500 text-sm mt-1">{{ t.no_recommend_desc }}</p>
+            <div class="mx-auto max-w-md np-card px-8 py-10">
+                <div class="edition-label text-editorial mb-3">暂无书评 · NO REVIEWS</div>
+                <p class="font-serif text-2xl font-bold text-ink dark:text-paper mb-2">{{ t.no_recommend }}</p>
+                <p class="text-sm text-neutral-500">{{ t.no_recommend_desc }}</p>
+            </div>
         </div>
 
     </div>
