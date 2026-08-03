@@ -61,7 +61,12 @@ const router = createRouter({
             path: "/test",
             name: "mbti-test",
             component: () => import ('../views/MbtiTestPage.vue'),
-        }
+        },
+        {
+            path: "/reader",
+            name: "reader",
+            component: () => import ('../views/ReaderView.vue'),
+        },
     ],
 })
 
