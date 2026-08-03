@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useTheme } from './composables/useTheme'
 import { useAuth } from './composables/useAuth'
 import { getUnreadCount } from './api'
@@ -7,7 +7,11 @@ import { resolveAssetUrl } from './api/config'
 import { t } from './composables/useI18n'
 
 const { isDark, toggle: toggleTheme } = useTheme()
-const { user, isLoggedIn, logout } = useAuth()
+const { user, isLoggedIn, logout, refreshUser } = useAuth()
+
+// 头像加载失败（如旧 URL 已被服务端删除）时回退为首字母墨印
+const avatarError = ref(false)
+watch(() => user.value?.avatar_url, () => { avatarError.value = false })
 
 // 通知未读数（铃铛红点，轻量轮询）
 const unread = ref(0)
@@ -27,6 +31,8 @@ async function refreshUnread() {
 onMounted(() => {
     refreshUnread()
     unreadTimer = window.setInterval(refreshUnread, 30000)
+    // 刷新服务端最新用户信息（头像等可能在其他设备/会话被修改）
+    refreshUser()
 })
 
 onUnmounted(() => {
@@ -93,7 +99,7 @@ const today = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: '
                   :title="`${user?.username} · 个人中心`"
                 >
                   <span class="w-8 h-8 shrink-0 text-paper bg-ink dark:bg-paper dark:text-ink flex items-center justify-center text-sm font-bold overflow-hidden">
-                    <img v-if="user?.avatar_url" :src="resolveAssetUrl(user.avatar_url)" :alt="user.username" class="w-full h-full object-cover" />
+                    <img v-if="user?.avatar_url && !avatarError" :src="resolveAssetUrl(user.avatar_url)" :alt="user.username" class="w-full h-full object-cover" @error="avatarError = true" />
                     <template v-else>{{ (user?.username || '?')[0].toUpperCase() }}</template>
                   </span>
                   <span class="min-w-0 text-sm font-medium group-hover:text-editorial transition-colors truncate">{{ user?.username }}</span>

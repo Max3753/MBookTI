@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import api from '../api'
+import api, { getMyProfile } from '../api'
 
 const token = ref(localStorage.getItem('token') || '')
 
@@ -51,5 +51,18 @@ export function useAuth() {
         localStorage.setItem('user', JSON.stringify(currentUser.value))
     }
 
-    return { token, user: currentUser, isLoggedIn, login, register, logout, updateUser }
+    // 从服务端拉取最新用户信息并全量同步（内存 + localStorage）。
+    // 解决：其他设备/会话修改资料（如更换头像）后，本端 localStorage 快照过期的问题。
+    async function refreshUser() {
+        if (!token.value) return
+        try {
+            const res = await getMyProfile()
+            if (res?.data) {
+                currentUser.value = res.data
+                localStorage.setItem('user', JSON.stringify(res.data))
+            }
+        } catch { /* 网络/401 等失败静默，保留本地快照 */ }
+    }
+
+    return { token, user: currentUser, isLoggedIn, login, register, logout, updateUser, refreshUser }
 }
