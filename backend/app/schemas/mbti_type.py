@@ -1,5 +1,5 @@
-from datetime import datetime
 from pydantic import BaseModel
+from app.schemas.datetime_utils import UtcDatetime
 
 class MbtiTypeResponse(BaseModel):
     id: int
@@ -8,6 +8,6 @@ class MbtiTypeResponse(BaseModel):
     name_en: str
     description: str
     traits: list[str]
-    created_at: datetime
+    created_at: UtcDatetime
     
     model_config = {"from_attributes": True}

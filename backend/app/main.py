@@ -1,6 +1,8 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import SQLAlchemyError
 from app.config import settings
 from app.database import AsyncSessionLocal
@@ -8,6 +10,10 @@ from app.seed.mbti_types import init_mbti_types
 from app.core.exceptions import global_exception_handler, http_exception_handler, sqlalchemy_exception_handler
 
 from app.routers import mbti_types, recommendations, books, auth, comments, proxy, users, announcements, notifications
+
+# 用户上传文件根目录（头像等）：backend/uploads
+UPLOAD_ROOT = Path(__file__).resolve().parent.parent / "uploads"
+UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -61,6 +67,9 @@ app.include_router(proxy.router)
 app.include_router(users.router)
 app.include_router(announcements.router)
 app.include_router(notifications.router)
+
+# 用户上传文件静态托管（头像等）：/uploads/avatars/xxx.jpg
+app.mount("/uploads", StaticFiles(directory=UPLOAD_ROOT), name="uploads")
 
 @app.get("/health")
 async def health():

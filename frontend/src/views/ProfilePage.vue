@@ -8,13 +8,14 @@ import {
     getMyComments,
     deleteComment,
     getMyFavorites,
+    uploadAvatar,
 } from '../api'
-import apiConfig from '../api/config'
+import apiConfig, { resolveAssetUrl } from '../api/config'
 import { useAuth } from '../composables/useAuth'
 import { getMbtiTypes } from '../api'
 
 const router = useRouter()
-const { logout } = useAuth()
+const { logout, updateUser } = useAuth()
 
 const reloadPage = () => window.location.reload()
 
@@ -39,6 +40,45 @@ const editMbtiId = ref<number | null>(null)
 const mbtiTypes = ref<any[]>([])
 const saving = ref(false)
 const saveMsg = ref('')
+
+// 头像上传
+const avatarUploading = ref(false)
+const avatarMsg = ref('')
+const avatarInputKey = ref(0)  // 强制重置 <input type=file>，允许重复选择同一文件
+const avatarPreview = ref<string>('')  // 选中文件后的本地预览 URL
+
+function onAvatarPick(event: Event) {
+    const input = event.target as HTMLInputElement
+    const file = input.files?.[0]
+    if (!file) return
+    avatarMsg.value = ''
+    avatarPreview.value = URL.createObjectURL(file)
+}
+
+async function submitAvatar() {
+    const input = document.getElementById('avatar-file-input') as HTMLInputElement | null
+    const file = input?.files?.[0]
+    if (!file) {
+        avatarMsg.value = '请先选择图片文件'
+        return
+    }
+    avatarUploading.value = true
+    avatarMsg.value = ''
+    try {
+        const res = await uploadAvatar(file)
+        profile.value = { ...profile.value, avatar_url: res.data.avatar_url }
+        updateUser({ avatar_url: res.data.avatar_url })
+        avatarMsg.value = '头像已更新'
+        avatarPreview.value = ''
+        avatarInputKey.value++
+    } catch (e: any) {
+        avatarMsg.value = e.response?.data?.detail || '上传失败，请检查文件格式（JPG/PNG/WebP/GIF，≤2MB）'
+        avatarPreview.value = ''
+        avatarInputKey.value++
+    } finally {
+        avatarUploading.value = false
+    }
+}
 
 // 改密码
 const pwOpen = ref(false)
@@ -226,11 +266,16 @@ onMounted(async () => {
         <div v-else-if="profile" class="space-y-6">
             <!-- 头部卡片：读者档案 -->
             <div class="np-card p-6 animate-newsprint-in">
-                <div class="flex items-start gap-5">
-                    <!-- 默认头像：方形墨印 -->
-                    <div class="w-16 h-16 shrink-0 flex items-center justify-center text-2xl font-serif font-bold text-white border border-ink dark:border-paper"
-                        :class="avatarColor">
-                        {{ (profile.username || '?')[0].toUpperCase() }}
+                <div class="flex flex-col sm:flex-row sm:items-start gap-5">
+                    <!-- 头像：有 avatar_url 显示图片，否则显示首字母墨印 -->
+                    <div class="w-16 h-16 shrink-0 flex items-center justify-center text-2xl font-serif font-bold text-white border border-ink dark:border-paper overflow-hidden bg-neutral-100 dark:bg-neutral-800">
+                        <img v-if="profile.avatar_url" :src="resolveAssetUrl(profile.avatar_url)" :alt="profile.username"
+                            class="w-full h-full object-cover" />
+                        <template v-else>
+                            <div class="w-full h-full flex items-center justify-center" :class="avatarColor">
+                                {{ (profile.username || '?')[0].toUpperCase() }}
+                            </div>
+                        </template>
                     </div>
                     <div class="flex-1 min-w-0">
                         <div class="flex items-center gap-3 flex-wrap">
@@ -244,7 +289,8 @@ onMounted(async () => {
                             注册于 {{ new Date(profile.created_at).toLocaleDateString('zh-CN') }}
                         </p>
                     </div>
-                    <div class="flex gap-2 shrink-0">
+                    <!-- 操作按钮：移动端换行到下一行 -->
+                    <div class="flex gap-2 shrink-0 sm:ml-auto">
                         <button @click="openEdit" class="np-btn np-btn-secondary px-4 cursor-pointer">编辑资料</button>
                         <button @click="openPw" class="np-btn np-btn-primary px-4 cursor-pointer">改密码</button>
                     </div>
@@ -270,6 +316,36 @@ onMounted(async () => {
                 <div v-if="editing" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" @click.self="editing = false">
                     <div class="np-card p-6 w-full max-w-sm animate-newsprint-in">
                         <h3 class="font-serif text-xl font-bold border-b-4 border-ink dark:border-paper pb-2 mb-5">编辑资料</h3>
+
+                        <!-- 头像更换 -->
+                        <label class="edition-label text-neutral-500 dark:text-neutral-400 block mb-1">头像</label>
+                        <div class="flex items-center gap-4 mb-4">
+                            <div class="w-14 h-14 shrink-0 flex items-center justify-center text-xl font-serif font-bold text-white border border-ink dark:border-paper overflow-hidden bg-neutral-100 dark:bg-neutral-800">
+                                <img v-if="avatarPreview" :src="avatarPreview" alt="预览" class="w-full h-full object-cover" />
+                                <img v-else-if="profile.avatar_url" :src="resolveAssetUrl(profile.avatar_url)" alt="当前头像" class="w-full h-full object-cover" />
+                                <div v-else class="w-full h-full flex items-center justify-center" :class="avatarColor">
+                                    {{ (profile.username || '?')[0].toUpperCase() }}
+                                </div>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <input :key="avatarInputKey" id="avatar-file-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif"
+                                    @change="onAvatarPick" class="block w-full text-xs text-neutral-500 dark:text-neutral-400
+                                    file:mr-3 file:px-3 file:py-1.5 file:border file:border-ink dark:file:border-paper
+                                    file:bg-ink file:text-paper dark:file:bg-paper dark:file:text-ink file:font-sans file:text-xs file:cursor-pointer" />
+                                <p class="edition-label text-neutral-400 dark:text-neutral-500 mt-1">JPG / PNG / WebP / GIF，不超过 2MB</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between mb-4">
+                            <button @click="submitAvatar" :disabled="avatarUploading"
+                                class="np-btn np-btn-secondary px-4 py-1.5 text-xs cursor-pointer">
+                                {{ avatarUploading ? '上传中...' : '上传头像' }}
+                            </button>
+                            <p v-if="avatarMsg" class="font-mono text-xs truncate"
+                                :class="avatarMsg === '头像已更新' ? 'text-neutral-500 dark:text-neutral-400' : 'text-editorial'">
+                                {{ avatarMsg }}
+                            </p>
+                        </div>
+
                         <label class="edition-label text-neutral-500 dark:text-neutral-400 block mb-1">用户名</label>
                         <input v-model="editUsername" type="text" class="np-input mb-4" />
                         <label class="edition-label text-neutral-500 dark:text-neutral-400 block mb-1">我的 MBTI 类型</label>

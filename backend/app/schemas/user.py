@@ -1,6 +1,6 @@
-from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, EmailStr, Field
+from app.schemas.datetime_utils import UtcDatetime
 
 
 class UserRegisterRequest(BaseModel):
@@ -21,7 +21,7 @@ class UserResponse(BaseModel):
     avatar_url: Optional[str] = None
     mbti_type_id: Optional[int] = None
     is_admin: bool = False
-    created_at: datetime
+    created_at: UtcDatetime
 
     model_config = {"from_attributes": True}
 
@@ -47,7 +47,7 @@ class UserProfileResponse(BaseModel):
     mbti_type_code: Optional[str] = None
     mbti_type_name: Optional[str] = None
     is_admin: bool = False
-    created_at: datetime
+    created_at: UtcDatetime
     stats: UserStats
 
 

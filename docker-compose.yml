@@ -5,6 +5,9 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: mbookti
+    # 显式锁定数据库会话时区为 UTC：保证 func.now() 写入统一为 UTC 无时区时间，
+    # 与后端 UtcDatetime 序列化约定一致（否则不同环境的 MySQL 时区不一致会导致时间错乱）
+    command: --default-time-zone='+00:00'
     volumes:
       - mysql_data:/var/lib/mysql
     ports:
@@ -28,6 +31,9 @@ services:
         condition: service_healthy
     ports:
       - "8000:8000"
+    volumes:
+      # 用户上传文件持久化（容器重建不丢失头像）
+      - uploads_data:/app/uploads
 
   frontend:
     build: ./frontend
@@ -39,3 +45,4 @@ services:
 
 volumes:
   mysql_data:
+  uploads_data:

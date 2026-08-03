@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getBookDetail, getBookComments, createComment, toggleCommentLike, toggleFavorite } from '../api'
-import apiConfig from '../api/config'
+import apiConfig, { resolveAssetUrl } from '../api/config'
 import { t } from '../composables/useI18n'
 import { useAuth } from '../composables/useAuth'
 
@@ -267,8 +267,9 @@ async function toggleLike(comment: any) {
                 >
                     <div class="flex items-start justify-between mb-2">
                         <div class="flex items-center gap-2 min-w-0">
-                            <div class="w-7 h-7 bg-ink text-paper dark:bg-paper dark:text-ink flex items-center justify-center font-mono text-xs font-bold shrink-0">
-                                {{ (comment.username || '?').charAt(0).toUpperCase() }}
+                            <div class="w-7 h-7 bg-ink text-paper dark:bg-paper dark:text-ink flex items-center justify-center font-mono text-xs font-bold shrink-0 overflow-hidden">
+                                <img v-if="comment.avatar_url" :src="resolveAssetUrl(comment.avatar_url)" :alt="comment.username" class="w-full h-full object-cover" />
+                                <template v-else>{{ (comment.username || '?').charAt(0).toUpperCase() }}</template>
                             </div>
                             <span class="text-sm font-semibold text-ink dark:text-paper truncate">{{ comment.username }}</span>
                             <span class="edition-label text-neutral-400 shrink-0">{{ timeAgo(comment.created_at) }}</span>

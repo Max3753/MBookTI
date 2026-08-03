@@ -82,6 +82,16 @@ export async function updateMyProfile(payload: { username?: string; avatar_url?:
     return res.data
 }
 
+// 上传头像（multipart/form-data，字段名 file）。返回 {data: {avatar_url}, message}
+export async function uploadAvatar(file: File) {
+    const form = new FormData()
+    form.append('file', file)
+    const res = await api.post('/users/me/avatar', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return res.data
+}
+
 export async function changePassword(payload: { old_password: string; new_password: string }) {
     const res = await api.put('/users/me/password', payload)
     return res.data

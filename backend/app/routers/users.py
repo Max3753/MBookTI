@@ -1,6 +1,8 @@
 ﻿# 用户个人中心路由
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from pathlib import Path
+import uuid
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,6 +27,60 @@ router = APIRouter(
     prefix="/api/v1/users",
     tags=["用户"],
 )
+
+# 头像上传目录：backend/uploads/avatars（Docker 内为 /app/uploads/avatars）
+AVATAR_DIR = Path(__file__).resolve().parent.parent.parent / "uploads" / "avatars"
+# 允许的图片类型（MIME），对应扩展名
+ALLOWED_AVATAR_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+}
+MAX_AVATAR_BYTES = 2 * 1024 * 1024  # 2MB
+
+
+@router.post("/me/avatar", response_model=ApiResponse)
+async def upload_avatar(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """上传头像（multipart/form-data，字段名 file）。保存后返回可访问的 avatar_url。"""
+    # 类型校验：仅允许常见图片格式
+    ext = ALLOWED_AVATAR_TYPES.get(file.content_type or "")
+    if ext is None:
+        raise HTTPException(status_code=400, detail="仅支持 JPG/PNG/WebP/GIF 图片")
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="文件为空")
+    if len(content) > MAX_AVATAR_BYTES:
+        raise HTTPException(status_code=400, detail="头像大小不能超过 2MB")
+
+    # 随机文件名，避免路径穿越与重名覆盖
+    AVATAR_DIR.mkdir(parents=True, exist_ok=True)
+    filename = f"avatar_{current_user.id}_{uuid.uuid4().hex}{ext}"
+    file_path = AVATAR_DIR / filename
+
+    # 同步写小文件（≤2MB，开销可忽略；避免引入额外异步文件依赖）
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    # 删除旧头像文件（仅删除本服务管理的文件，不删外链 URL）
+    old_url = current_user.avatar_url or ""
+    if old_url.startswith("/uploads/avatars/"):
+        old_path = AVATAR_DIR / Path(old_url).name
+        if old_path.exists() and old_path != file_path:
+            try:
+                old_path.unlink()
+            except OSError:
+                pass
+
+    current_user.avatar_url = f"/uploads/avatars/{filename}"
+    await session.commit()
+
+    return ApiResponse(data={"avatar_url": current_user.avatar_url}, message="头像已更新")
 
 
 @router.get("/me", response_model=ApiResponse[UserProfileResponse])

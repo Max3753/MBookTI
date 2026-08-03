@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useTheme } from './composables/useTheme'
 import { useAuth } from './composables/useAuth'
 import { getUnreadCount } from './api'
+import { resolveAssetUrl } from './api/config'
 import { t } from './composables/useI18n'
 
 const { isDark, toggle: toggleTheme } = useTheme()
@@ -88,13 +89,14 @@ const today = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: '
               <template v-if="isLoggedIn">
                 <router-link
                   to="/profile"
-                  class="flex items-center gap-2 group cursor-pointer min-h-[44px] px-2"
+                  class="flex items-center gap-2 group cursor-pointer min-h-[44px] px-2 max-w-[40vw] sm:max-w-none"
                   :title="`${user?.username} · 个人中心`"
                 >
-                  <span class="w-8 h-8 text-paper bg-ink dark:bg-paper dark:text-ink flex items-center justify-center text-sm font-bold">
-                    {{ (user?.username || '?')[0].toUpperCase() }}
+                  <span class="w-8 h-8 shrink-0 text-paper bg-ink dark:bg-paper dark:text-ink flex items-center justify-center text-sm font-bold overflow-hidden">
+                    <img v-if="user?.avatar_url" :src="resolveAssetUrl(user.avatar_url)" :alt="user.username" class="w-full h-full object-cover" />
+                    <template v-else>{{ (user?.username || '?')[0].toUpperCase() }}</template>
                   </span>
-                  <span class="hidden sm:inline text-sm font-medium group-hover:text-editorial transition-colors">{{ user?.username }}</span>
+                  <span class="min-w-0 text-sm font-medium group-hover:text-editorial transition-colors truncate">{{ user?.username }}</span>
                 </router-link>
                 <button
                   @click="logout"

@@ -1,6 +1,6 @@
-from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, Field
+from app.schemas.datetime_utils import UtcDatetime
 
 
 class AnnouncementCreateRequest(BaseModel):
@@ -14,6 +14,6 @@ class AnnouncementResponse(BaseModel):
     content: str
     is_active: bool
     created_by: int
-    created_at: datetime
+    created_at: UtcDatetime
 
     model_config = {"from_attributes": True}

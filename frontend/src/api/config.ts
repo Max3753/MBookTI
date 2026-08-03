@@ -21,4 +21,14 @@ const apiConfig = {
     timeout: 60000,  // AI 生成 + 封面搜索可能耗时较长，放宽到 60 秒
 }
 
+// 把后端返回的相对路径（如 /uploads/avatars/xxx.jpg）解析为可访问的完整 URL。
+// baseURL 形如 http://host:5000/api/v1（开发）或 /api/v1（生产同源反代），
+// 静态文件托管在 origin + /uploads/...（生产经 nginx 反代 /uploads/ 到后端）。
+export function resolveAssetUrl(path?: string | null): string {
+    if (!path) return ''
+    if (/^https?:\/\//.test(path)) return path  // 外部绝对 URL 直接返回
+    const origin = apiConfig.baseURL.replace(/\/api\/v1\/?$/, '')
+    return `${origin}${path.startsWith('/') ? path : `/${path}`}`
+}
+
 export default apiConfig

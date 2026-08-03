@@ -1,6 +1,6 @@
-from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel
+from app.schemas.datetime_utils import UtcDatetime
 
 class BookResponse(BaseModel):
     id: int
@@ -11,7 +11,7 @@ class BookResponse(BaseModel):
     description: Optional[str] = None
     genre: Optional[str] = None
     language: str = "zh"
-    created_at: datetime
+    created_at: UtcDatetime
     
     model_config = {"from_attributes": True}
 
@@ -31,6 +31,6 @@ class BookDetailResponse(BaseModel):
     recommended_types: list[RecommendedTypeInfo] = []
     comment_count: int = 0
     is_favorited: bool = False
-    created_at: datetime
+    created_at: UtcDatetime
 
     model_config = {"from_attributes": True}

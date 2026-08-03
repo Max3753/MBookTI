@@ -11,3 +11,6 @@ wheels/
 
 # Environment variables (contains API keys and DB credentials)
 .env
+
+# 用户上传文件
+uploads/

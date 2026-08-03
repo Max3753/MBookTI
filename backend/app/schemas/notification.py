@@ -1,6 +1,6 @@
-from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, Field
+from app.schemas.datetime_utils import UtcDatetime
 
 
 class NotificationCreateRequest(BaseModel):
@@ -15,7 +15,7 @@ class NotificationResponse(BaseModel):
     related_book_id: Optional[int] = None
     related_comment_id: Optional[int] = None
     is_read: bool
-    created_at: datetime
+    created_at: UtcDatetime
 
     model_config = {"from_attributes": True}
 

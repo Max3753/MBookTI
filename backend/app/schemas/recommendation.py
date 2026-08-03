@@ -1,6 +1,6 @@
-from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, Field
+from app.schemas.datetime_utils import UtcDatetime
 
 class RecommendationBook(BaseModel):
     """推荐中返回的书籍信息(精简)"""
@@ -17,7 +17,7 @@ class RecommendationResponse(BaseModel):
     relevance_score: int
     is_ai_generated: bool
     likes_count: int
-    created_at: datetime
+    created_at: UtcDatetime
     book: RecommendationBook
 
     model_config = {"from_attributes": True}

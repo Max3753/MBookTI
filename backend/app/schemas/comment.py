@@ -1,6 +1,6 @@
-from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, Field
+from app.schemas.datetime_utils import UtcDatetime
 
 
 class CommentCreateRequest(BaseModel):
@@ -13,12 +13,13 @@ class CommentResponse(BaseModel):
     id: int
     user_id: int
     username: str
+    avatar_url: Optional[str] = None
     book_id: int
     parent_id: Optional[int] = None
     content: str
     likes_count: int
     is_edited: bool
-    created_at: datetime
+    created_at: UtcDatetime
 
     model_config = {"from_attributes": True}
 
@@ -32,4 +33,4 @@ class MyCommentResponse(BaseModel):
     parent_id: Optional[int] = None
     content: str
     likes_count: int
-    created_at: datetime
+    created_at: UtcDatetime
