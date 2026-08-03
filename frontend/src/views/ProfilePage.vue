@@ -231,14 +231,14 @@ async function saveProfile() {
             mbti_type_id: editMbtiId.value,
         })
         profile.value = res.data
-        // 同步 localStorage 里的 user（MBTI 联动首页用）
-        const cached = JSON.parse(localStorage.getItem('user') || 'null')
-        if (cached) {
-            cached.username = res.data.username
-            cached.mbti_type_id = res.data.mbti_type_id
-            cached.avatar_url = res.data.avatar_url ?? cached.avatar_url
-            localStorage.setItem('user', JSON.stringify(cached))
-        }
+        // 同步共享用户状态（内存 ref + localStorage），导航栏/首页/类型页即时响应。
+        // 不要直接写 localStorage：currentUser ref 只在模块加载时读一次，
+        // 必须走 updateUser() 才能让本次会话内其他页面感知。
+        updateUser({
+            username: res.data.username,
+            mbti_type_id: res.data.mbti_type_id,
+            avatar_url: res.data.avatar_url,
+        })
         editing.value = false
         saveMsg.value = '已保存'
         setTimeout(() => (saveMsg.value = ''), 2000)

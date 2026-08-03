@@ -2,8 +2,10 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getNotifications, markNotificationRead, markAllNotificationsRead } from '../api'
+import { useNotifications } from '../composables/useNotifications'
 
 const router = useRouter()
+const { refreshUnread } = useNotifications()
 const notifications = ref<any[]>([])
 const loading = ref(true)
 const total = ref(0)
@@ -44,6 +46,7 @@ async function openNotification(n: any) {
         try {
             await markNotificationRead(n.id)
             n.is_read = true
+            refreshUnread()  // 即时更新导航栏红点
         } catch { /* 忽略 */ }
         markingId.value = null
     }
@@ -56,6 +59,7 @@ async function readAll() {
     try {
         await markAllNotificationsRead()
         notifications.value.forEach((n) => (n.is_read = true))
+        refreshUnread()  // 即时清零导航栏红点
     } catch { /* 忽略 */ }
 }
 

@@ -2,31 +2,20 @@
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useTheme } from './composables/useTheme'
 import { useAuth } from './composables/useAuth'
-import { getUnreadCount } from './api'
+import { useNotifications } from './composables/useNotifications'
 import { resolveAssetUrl } from './api/config'
 import { t } from './composables/useI18n'
 
 const { isDark, toggle: toggleTheme } = useTheme()
 const { user, isLoggedIn, logout, refreshUser } = useAuth()
+const { unread, refreshUnread } = useNotifications()
 
 // 头像加载失败（如旧 URL 已被服务端删除）时回退为首字母墨印
 const avatarError = ref(false)
 watch(() => user.value?.avatar_url, () => { avatarError.value = false })
 
 // 通知未读数（铃铛红点，轻量轮询）
-const unread = ref(0)
 let unreadTimer: number | null = null
-
-async function refreshUnread() {
-    if (!isLoggedIn.value) {
-        unread.value = 0
-        return
-    }
-    try {
-        const res = await getUnreadCount()
-        unread.value = res.data?.unread || 0
-    } catch { /* 忽略 */ }
-}
 
 onMounted(() => {
     refreshUnread()
