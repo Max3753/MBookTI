@@ -354,6 +354,15 @@ onMounted(async () => {
                     </div>
                 </div>
 
+                <!-- 电子书阅读器入口：独立横条，报纸风格分隔 -->
+                <div class="mt-6 flex items-center justify-between gap-4 border-t-2 border-ink dark:border-paper pt-5">
+                    <div>
+                        <h2 class="font-serif text-lg font-bold text-ink dark:text-paper">电子书阅读器</h2>
+                        <p class="edition-label text-neutral-500 dark:text-neutral-400 mt-1">支持 EPUB / TXT 在线阅读，自动保存阅读进度</p>
+                    </div>
+                    <router-link to="/reader" class="np-btn np-btn-ghost px-4 shrink-0">打开阅读器</router-link>
+                </div>
+
                 <!-- 统计徽章：报纸数据栏 -->
                 <div class="grid grid-cols-3 border border-ink dark:border-paper mt-6">
                     <div class="py-4 text-center border-r border-ink dark:border-paper">
