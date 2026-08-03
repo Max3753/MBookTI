@@ -30,14 +30,27 @@ router = APIRouter(
 
 # 头像上传目录：backend/uploads/avatars（Docker 内为 /app/uploads/avatars）
 AVATAR_DIR = Path(__file__).resolve().parent.parent.parent / "uploads" / "avatars"
-# 允许的图片类型（MIME），对应扩展名
-ALLOWED_AVATAR_TYPES = {
-    "image/jpeg": ".jpg",
-    "image/png": ".png",
-    "image/webp": ".webp",
-    "image/gif": ".gif",
-}
+# 允许的图片扩展名
+ALLOWED_AVATAR_EXTS = {".jpg", ".png", ".webp", ".gif"}
 MAX_AVATAR_BYTES = 2 * 1024 * 1024  # 2MB
+
+
+def _detect_image_ext(content: bytes) -> str | None:
+    """基于文件魔数（magic bytes）检测图片格式，返回扩展名或 None。
+
+    不信任客户端声明的 Content-Type：移动端（尤其 iOS/微信内置浏览器）常把
+    HEIC / octet-stream 等类型塞给后端，即使文件本身是合法的 JPG/PNG。
+    文件头是文件真实内容的指纹，无法伪装。
+    """
+    if content[:3] == b"\xff\xd8\xff":
+        return ".jpg"
+    if content[:8] == b"\x89PNG\r\n\x1a\n":
+        return ".png"
+    if content[:4] == b"GIF8":
+        return ".gif"
+    if len(content) >= 12 and content[:4] == b"RIFF" and content[8:12] == b"WEBP":
+        return ".webp"
+    return None
 
 
 @router.post("/me/avatar", response_model=ApiResponse)
@@ -47,16 +60,16 @@ async def upload_avatar(
     session: AsyncSession = Depends(get_db),
 ):
     """上传头像（multipart/form-data，字段名 file）。保存后返回可访问的 avatar_url。"""
-    # 类型校验：仅允许常见图片格式
-    ext = ALLOWED_AVATAR_TYPES.get(file.content_type or "")
-    if ext is None:
-        raise HTTPException(status_code=400, detail="仅支持 JPG/PNG/WebP/GIF 图片")
-
     content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="文件为空")
     if len(content) > MAX_AVATAR_BYTES:
         raise HTTPException(status_code=400, detail="头像大小不能超过 2MB")
+
+    # 格式校验：基于文件真实内容（魔数），而非客户端声明的 MIME 类型
+    ext = _detect_image_ext(content)
+    if ext is None or ext not in ALLOWED_AVATAR_EXTS:
+        raise HTTPException(status_code=400, detail="仅支持 JPG/PNG/WebP/GIF 图片")
 
     # 随机文件名，避免路径穿越与重名覆盖
     AVATAR_DIR.mkdir(parents=True, exist_ok=True)

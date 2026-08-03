@@ -46,22 +46,66 @@ const avatarUploading = ref(false)
 const avatarMsg = ref('')
 const avatarInputKey = ref(0)  // 强制重置 <input type=file>，允许重复选择同一文件
 const avatarPreview = ref<string>('')  // 选中文件后的本地预览 URL
+const pendingAvatarFile = ref<File | null>(null)  // 已选择、待上传的图片文件
+let previewObjectUrl: string | null = null  // 追踪生成的 object URL 以便释放
 
 function onAvatarPick(event: Event) {
     const input = event.target as HTMLInputElement
     const file = input.files?.[0]
     if (!file) return
     avatarMsg.value = ''
-    avatarPreview.value = URL.createObjectURL(file)
+    // 把选中的文件规整为可直接上传的 File：
+    // 支持格式（JPG/PNG/WebP/GIF）直接使用；HEIC 等移动端格式经 canvas 转码为 JPEG 再上传。
+    prepareAvatarFile(file).then((prepared) => {
+        if (!prepared) return
+        pendingAvatarFile.value = prepared
+        if (previewObjectUrl) {
+            URL.revokeObjectURL(previewObjectUrl)
+            previewObjectUrl = null
+        }
+        previewObjectUrl = URL.createObjectURL(prepared)
+        avatarPreview.value = previewObjectUrl
+        // 选择后立即上传，避免用户只点"保存"导致头像丢失
+        submitAvatar()
+    })
 }
 
-async function submitAvatar() {
-    const input = document.getElementById('avatar-file-input') as HTMLInputElement | null
-    const file = input?.files?.[0]
-    if (!file) {
-        avatarMsg.value = '请先选择图片文件'
-        return
+/** 校验并规整待上传图片：支持格式原样返回；不支持格式（如 HEIC）转码为 JPEG。 */
+async function prepareAvatarFile(file: File): Promise<File | null> {
+    const supported = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    if (supported.includes(file.type)) {
+        return file
     }
+    // 非图片一律拒绝（用 createImageBitmap 兜底判断可解码性）
+    if (!file.type.startsWith('image/')) {
+        avatarMsg.value = '仅支持 JPG/PNG/WebP/GIF 图片'
+        return null
+    }
+    // HEIC/HEIF 等移动端格式：canvas 转码 JPEG
+    try {
+        const bitmap = await createImageBitmap(file)
+        const canvas = document.createElement('canvas')
+        canvas.width = bitmap.width
+        canvas.height = bitmap.height
+        const ctx = canvas.getContext('2d')
+        if (!ctx) throw new Error('no ctx')
+        ctx.drawImage(bitmap, 0, 0)
+        bitmap.close()
+        const blob = await new Promise<Blob | null>((resolve) =>
+            canvas.toBlob(resolve, 'image/jpeg', 0.92)
+        )
+        if (!blob) throw new Error('toBlob failed')
+        return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' })
+    } catch {
+        avatarMsg.value = '无法识别该图片格式，请选择 JPG/PNG/WebP/GIF'
+        return null
+    }
+}
+
+/** 上传已选择的头像文件；无待上传文件时静默返回。 */
+async function submitAvatar() {
+    const file = pendingAvatarFile.value
+    if (!file) return
     avatarUploading.value = true
     avatarMsg.value = ''
     try {
@@ -69,15 +113,24 @@ async function submitAvatar() {
         profile.value = { ...profile.value, avatar_url: res.data.avatar_url }
         updateUser({ avatar_url: res.data.avatar_url })
         avatarMsg.value = '头像已更新'
-        avatarPreview.value = ''
-        avatarInputKey.value++
+        clearPendingAvatar()
     } catch (e: any) {
         avatarMsg.value = e.response?.data?.detail || '上传失败，请检查文件格式（JPG/PNG/WebP/GIF，≤2MB）'
-        avatarPreview.value = ''
-        avatarInputKey.value++
+        clearPendingAvatar()
     } finally {
         avatarUploading.value = false
     }
+}
+
+/** 清空待上传文件与预览（上传完成/失败后调用）。 */
+function clearPendingAvatar() {
+    pendingAvatarFile.value = null
+    if (previewObjectUrl) {
+        URL.revokeObjectURL(previewObjectUrl)
+        previewObjectUrl = null
+    }
+    avatarPreview.value = ''
+    avatarInputKey.value++
 }
 
 // 改密码
@@ -169,6 +222,10 @@ async function saveProfile() {
     saving.value = true
     saveMsg.value = ''
     try {
+        // 若头像仍在自动上传中，等待其完成，避免保存时头像丢失
+        while (avatarUploading.value) {
+            await new Promise((r) => setTimeout(r, 200))
+        }
         const res = await updateMyProfile({
             username: editUsername.value.trim(),
             mbti_type_id: editMbtiId.value,
@@ -179,6 +236,7 @@ async function saveProfile() {
         if (cached) {
             cached.username = res.data.username
             cached.mbti_type_id = res.data.mbti_type_id
+            cached.avatar_url = res.data.avatar_url ?? cached.avatar_url
             localStorage.setItem('user', JSON.stringify(cached))
         }
         editing.value = false
@@ -328,18 +386,17 @@ onMounted(async () => {
                                 </div>
                             </div>
                             <div class="flex-1 min-w-0">
-                                <input :key="avatarInputKey" id="avatar-file-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif"
+                                <input :key="avatarInputKey" id="avatar-file-input" type="file" accept="image/*"
                                     @change="onAvatarPick" class="block w-full text-xs text-neutral-500 dark:text-neutral-400
                                     file:mr-3 file:px-3 file:py-1.5 file:border file:border-ink dark:file:border-paper
                                     file:bg-ink file:text-paper dark:file:bg-paper dark:file:text-ink file:font-sans file:text-xs file:cursor-pointer" />
-                                <p class="edition-label text-neutral-400 dark:text-neutral-500 mt-1">JPG / PNG / WebP / GIF，不超过 2MB</p>
+                                <p class="edition-label text-neutral-400 dark:text-neutral-500 mt-1">JPG / PNG / WebP / GIF（HEIC 自动转码），不超过 2MB</p>
                             </div>
                         </div>
                         <div class="flex items-center justify-between mb-4">
-                            <button @click="submitAvatar" :disabled="avatarUploading"
-                                class="np-btn np-btn-secondary px-4 py-1.5 text-xs cursor-pointer">
-                                {{ avatarUploading ? '上传中...' : '上传头像' }}
-                            </button>
+                            <span class="edition-label text-neutral-400 dark:text-neutral-500">
+                                {{ avatarUploading ? '上传中...' : '选择图片后自动上传' }}
+                            </span>
                             <p v-if="avatarMsg" class="font-mono text-xs truncate"
                                 :class="avatarMsg === '头像已更新' ? 'text-neutral-500 dark:text-neutral-400' : 'text-editorial'">
                                 {{ avatarMsg }}
