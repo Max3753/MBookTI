@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useReaderStore } from '../stores/reader'
 import { createAdapter } from '../adapters'
 import { useReaderFullscreen } from '../composables/useReaderFullscreen'
@@ -76,6 +76,14 @@ watch(() => [store.settings.bgColor, store.settings.fgColor] as const, ([bg, fg]
 
 onMounted(() => {
     store.loadSettings()   // 恢复持久化的阅读设置
+})
+
+// 离开阅读器时清理内存态：store.adapter 是全局单例，若不清理，
+// 从个人主页等页面 SPA 跳回 /reader 时会直接渲染阅读台（且容器空白，
+// 因为 onMounted 不再重新 renderTo），而不是空态主页；刷新后才会正常。
+// 进度已持久化到 localStorage，下次选同一文件会自动续读，不影响。
+onUnmounted(() => {
+    store.setAdapter(null, '')
 })
 
 function openPicker() { fileInput.value?.click() }
