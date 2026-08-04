@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useReaderStore } from '../stores/reader'
 import { createAdapter } from '../adapters'
 import { useReaderFullscreen } from '../composables/useReaderFullscreen'
+import type { ToCItem } from '../adapters/types'
 
 
 const store = useReaderStore()
@@ -12,8 +13,12 @@ const container = ref<HTMLElement | null>(null)
 const readerRoot = ref<HTMLElement | null>(null)
 const error = ref('')
 const bookTitle = ref('')
-const total = ref(0)
+const bookAuthor = ref('')
 const showColors = ref(false)
+
+// 目录抽屉
+const tocOpen = ref(false)
+const tocItems = ref<ToCItem[]>([])
 
 // PDF 缩放（仅 PDF 显示控件；100 = 适配容器宽度）
 const ZOOM_MIN = 50
@@ -60,6 +65,7 @@ function onCustomColor(event: Event) {
 watch(isFullscreen, () => {
     nextTick(() => requestAnimationFrame(() => {
         void store.adapter?.relayout?.()
+        refreshProgress()
     }))
 })
 
@@ -84,11 +90,19 @@ async function onFilePicked(event: Event) {
         zoom.value = 100   // 新书重置缩放（PDF 专属）
         await adapter.load()                       // 先 load：metadata 才有值
         bookTitle.value = adapter.metadata.title   // 书名现在能显示了
-        total.value = adapter.getTotal()
-        store.setAdapter(adapter, `${file.name}_${file.size}`)  // 再设 store
+        bookAuthor.value = adapter.metadata.author
+        try {
+            tocItems.value = await adapter.getToC()    // EPUB 真实目录 / TXT 分段目录 / PDF 大纲
+        } catch {
+            tocItems.value = []                        // 目录加载失败不阻塞开书
+        }
+        tocOpen.value = false
+        store.setAdapter(adapter, `${file.name}_${file.size}`)  // 再设 store（触发阅读台渲染）
+        await nextTick()                             // 等容器挂载（阅读台在 v-else 分支里）再渲染内容
         if (container.value) await adapter.renderTo(container.value)
         await adapter.setTheme?.(store.settings.bgColor, store.settings.fgColor)  // 应用当前背景色
         store.saveProgress()
+        refreshProgress()
     } catch (e: unknown) {
         error.value = e instanceof Error ? e.message : '打开失败'
         store.setAdapter(null, '')
@@ -100,72 +114,322 @@ async function onFilePicked(event: Event) {
 async function next() {
     try { await store.adapter?.next() } catch (e: unknown) { error.value = e instanceof Error ? e.message : '翻页失败' }
     store.saveProgress()
+    refreshProgress()
 }
 async function prev() {
     try { await store.adapter?.prev() } catch (e: unknown) { error.value = e instanceof Error ? e.message : '翻页失败' }
     store.saveProgress()
+    refreshProgress()
 }
+
+// ---- 目录抽屉 ----
+// 树形目录拍平为带缩进深度的列表，便于渲染多级子目录（EPUB 常见两级）
+interface FlatToC {
+    id: string
+    label: string
+    depth: number
+    item: ToCItem
+}
+
+function flattenToC(items: ToCItem[], depth = 0, out: FlatToC[] = []): FlatToC[] {
+    for (const item of items) {
+        out.push({ id: item.id, label: item.label, depth, item })
+        if (item.subitems?.length) flattenToC(item.subitems, depth + 1, out)
+    }
+    return out
+}
+
+const flatToc = computed<FlatToC[]>(() => flattenToC(tocItems.value))
+
+/**
+ * 点击目录项跳转：EPUB 用章节 href（epubjs rendition.display 支持）、
+ * TXT 用段落索引（id 形如 p-<段落号>）；PDF 大纲无页码信息，仅作结构展示。
+ */
+async function jumpTo(item: ToCItem) {
+    const adapter = store.adapter
+    if (!adapter) return
+    try {
+        if (adapter.format === 'epub' && item.href) {
+            await adapter.setProgress(item.href)
+        } else if (adapter.format === 'txt') {
+            const match = /^p-(\d+)$/.exec(item.id)
+            if (!match) return
+            await adapter.setProgress(Number(match[1]))
+        } else {
+            return
+        }
+        tocOpen.value = false
+        store.saveProgress()
+        refreshProgress()
+    } catch (e: unknown) {
+        error.value = e instanceof Error ? e.message : '目录跳转失败'
+    }
+}
+
+// ---- 阅读进度 ----
+// 各格式的进度文案：PDF=页码 / TXT=段落数 / EPUB=章节数（从 CFI 解析章节序号）
+const positionText = ref('')
+const progressPercent = ref(0)
+
+function refreshProgress() {
+    const adapter = store.adapter
+    if (!adapter) {
+        positionText.value = ''
+        progressPercent.value = 0
+        return
+    }
+    const totalCount = adapter.getTotal()
+    const pos = adapter.getProgress()
+    if (adapter.format === 'pdf') {
+        const current = typeof pos === 'number' ? Math.max(1, Math.min(Math.floor(pos), totalCount)) : 1
+        positionText.value = totalCount > 0 ? `第 ${current} / ${totalCount} 页` : ''
+        progressPercent.value = totalCount > 0 ? Math.round(((current - 1) / totalCount) * 100) : 0
+    } else if (adapter.format === 'txt') {
+        const current = typeof pos === 'number' ? Math.max(0, Math.floor(pos)) : 0
+        positionText.value = totalCount > 0 ? `第 ${Math.min(current + 1, totalCount)} / ${totalCount} 段` : ''
+        progressPercent.value = totalCount > 0 ? Math.round((Math.min(current, totalCount) / totalCount) * 100) : 0
+    } else {
+        // EPUB：epubjs 的 CFI 形如 epubcfi(/6/<章节序号>[id]!/...)，解析序号换算当前章
+        const match = /epubcfi\(\/\d+\/(\d+)/.exec(String(pos))
+        const chapter = match ? Number(match[1]) + 1 : 0
+        positionText.value = totalCount > 0 ? `第 ${Math.min(Math.max(chapter, 1), totalCount)} / ${totalCount} 章` : ''
+        progressPercent.value = totalCount > 0 ? Math.round(((Math.min(Math.max(chapter, 1), totalCount) - 1) / totalCount) * 100) : 0
+    }
+    progressPercent.value = Math.max(0, Math.min(100, progressPercent.value))
+}
+
+// ---- 字体大小调节（PDF 不适用，仅作用于阅读容器文字）----
+const FONT_MIN = 12
+const FONT_MAX = 28
+
+function changeFontSize(delta: number) {
+    store.settings.fontSize = Math.min(FONT_MAX, Math.max(FONT_MIN, store.settings.fontSize + delta))
+    store.saveSettings()
+    // 字号变化影响 TXT 分页高度 → 等 DOM 应用新字号后重排，保持当前段落锚点；EPUB/PDF 无副作用
+    nextTick(() => {
+        void store.adapter?.relayout?.()
+        refreshProgress()
+    })
+}
+
+// 格式徽标文案
+const formatLabel = computed(() => {
+    switch (store.adapter?.format) {
+        case 'epub': return 'EPUB 电子书'
+        case 'pdf': return 'PDF 文档'
+        case 'txt': return 'TXT 纯文本'
+        default: return ''
+    }
+})
 </script>
 
 <template>
-    <div class="max-w-3xl mx-auto px-4 py-8">
+    <div class="max-w-4xl mx-auto px-4 py-8">
         <input ref="fileInput" type="file" accept=".txt,.epub,.pdf" class="hidden" @change="onFilePicked" />
-        <div>
-            <button class="np-btn np-btn-primary" @click="openPicker">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                </svg>
-                选择电子书文件
-            </button>
-            <p class="text-xs text-gray-500 mt-2">支持 EPUB / PDF / TXT 格式 · 阅读进度自动保存</p>
-        </div>
 
-        <p v-if="error" class="text-red-500 mt-2">{{ error }}</p>
+        <!-- 空状态：报纸刊头引导（无书时展示）
+             ⚠️ 不用 Transition out-in 包裹：它会让 v-else 阅读台延迟到旧元素离场后才挂载，
+             导致 onFilePicked 里 nextTick 后 container 仍为 null、renderTo 被跳过。
+             阅读台/空状态自身已有 animate-newsprint-in 入场动画。 -->
+        <section v-if="!store.adapter" class="newsprint-texture animate-newsprint-in">
+                <div class="text-center pt-6 pb-4">
+                    <div class="edition-label text-editorial mb-4">MBookTI · READING DESK 阅读专刊</div>
+                    <h1 class="np-hero text-ink dark:text-paper">今日宜读书</h1>
+                    <p class="mt-5 font-serif text-lg sm:text-xl italic text-neutral-600 dark:text-neutral-300">
+                        「择一册而坐，借半日清闲。铅字有光，常读常新。」
+                    </p>
+                    <div class="mt-6 flex items-center justify-center gap-3 flex-wrap">
+                        <span class="np-badge np-badge-editorial">EPUB</span>
+                        <span class="np-badge np-badge-outline">PDF</span>
+                        <span class="np-badge np-badge-outline">TXT</span>
+                    </div>
+                    <div class="ornament-divider">❦</div>
 
-        <div ref="readerRoot" class="reader-root mt-4" :style="{ '--reader-bg': store.settings.bgColor }">
-            <h1 v-if="bookTitle" class="font-serif font-black text-2xl mb-4">{{ bookTitle }}</h1>
-
-            <div ref="container" class="reader-container h-[70vh] border border-ink/10 overflow-hidden"></div>
-
-            <div v-if="store.adapter" class="mt-6 flex gap-4 items-center">
-                <button class="np-btn np-btn-ghost" @click="prev">上一页</button>
-                <button class="np-btn" @click="next">下一页</button>
-
-                <div v-if="isPdf" class="flex items-center gap-1" title="页面缩放">
-                    <button class="np-btn np-btn-ghost !min-h-[36px] px-3 text-xs" @click="zoomOut" aria-label="缩小">−</button>
-                    <button class="np-btn np-btn-ghost !min-h-[36px] px-3 text-xs min-w-[3.5rem]" @click="resetZoom" title="重置为适配宽度">{{ zoom }}%</button>
-                    <button class="np-btn np-btn-ghost !min-h-[36px] px-3 text-xs" @click="zoomIn" aria-label="放大">＋</button>
+                    <div class="max-w-sm mx-auto np-card hard-shadow p-6 sm:p-8 text-left">
+                        <div class="flex items-center gap-2 edition-label text-neutral-500 mb-5">
+                            <span class="inline-block w-2 h-2 bg-editorial" aria-hidden="true"></span>
+                            开读 · START READING
+                        </div>
+                        <button class="np-btn np-btn-primary w-full cursor-pointer" @click="openPicker">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                            </svg>
+                            选择电子书文件
+                        </button>
+                        <p class="mt-4 text-center edition-label text-neutral-500 dark:text-neutral-400">
+                            阅读进度自动保存 · 支持续读
+                        </p>
+                    </div>
                 </div>
+            </section>
 
-                <div class="relative">
-                    <button class="np-btn np-btn-ghost !min-h-[36px] px-3 text-xs" @click="showColors = !showColors">背景色</button>
-                    <div v-if="showColors" class="absolute right-0 top-full mt-2 z-10 w-56 bg-white border border-ink/10 shadow-lg p-3">
-                        <div class="flex gap-2 flex-wrap">
-                            <button
-                                v-for="c in PRESET_COLORS"
-                                :key="c.bg"
-                                class="w-8 h-8 rounded-full border border-ink/20 cursor-pointer"
-                                :style="{ backgroundColor: c.bg }"
-                                :title="c.name"
-                                @click="applyColors(c.bg, c.fg)"
-                            ></button>
+            <!-- 阅读台：报头 + 进度条 + 阅读容器 + 工具栏 -->
+            <div
+                v-else
+                ref="readerRoot"
+                class="reader-root animate-newsprint-in"
+                :style="{ '--reader-bg': store.settings.bgColor, '--reader-font-size': store.settings.fontSize + 'px' }"
+            >
+                <header class="border-b-4 border-ink dark:border-paper pb-4 mb-4">
+                    <div class="flex items-center justify-between edition-label mb-3">
+                        <span class="text-editorial">阅读专刊 · READING DESK</span>
+                        <div class="flex items-center gap-4">
+                            <span class="text-neutral-500 dark:text-neutral-400 hidden sm:inline">{{ formatLabel }}</span>
+                            <button class="np-btn np-btn-ghost !min-h-[30px] !px-3 text-[10px]" @click="openPicker">换一本</button>
                         </div>
-                        <div class="mt-3 flex items-center gap-2">
-                            <input type="color" class="w-8 h-8 p-0 border-0 cursor-pointer" :value="store.settings.bgColor" @input="onCustomColor" />
-                            <span class="text-xs text-gray-500">自定义背景色</span>
-                        </div>
+                    </div>
+                    <h1 class="font-serif font-black text-3xl sm:text-4xl leading-tight break-words text-ink dark:text-paper">
+                        {{ bookTitle }}
+                    </h1>
+                    <div class="mt-3 flex items-center gap-3 flex-wrap">
+                        <span class="font-serif italic text-neutral-600 dark:text-neutral-300">作者 · {{ bookAuthor }}</span>
+                        <span class="np-badge np-badge-outline">{{ formatLabel }}</span>
+                    </div>
+                </header>
+
+                <!-- 阅读进度：页码/章节 + 进度条 -->
+                <div class="flex items-center gap-3 mb-3">
+                    <span class="np-badge np-badge-outline shrink-0">{{ positionText }}</span>
+                    <div
+                        class="flex-1 h-1.5 bg-neutral-200 dark:bg-neutral-600"
+                        role="progressbar"
+                        :aria-valuenow="progressPercent"
+                        aria-valuemin="0"
+                        aria-valuemax="100"
+                    >
+                        <div
+                            class="h-full bg-editorial transition-all duration-300"
+                            :style="{ width: progressPercent + '%' }"
+                        ></div>
                     </div>
                 </div>
 
-                <button
-                    v-if="fullscreenSupported"
-                    class="np-btn np-btn-ghost !min-h-[36px] px-3 text-xs ml-auto"
-                    @click="toggleFullscreen"
-                >
-                    {{ isFullscreen ? '退出全屏' : '全屏' }}
-                </button>
+                <!-- 阅读容器（外框：硬阴影报纸剪贴感，背景跟随用户设置） -->
+                <div class="reader-frame border border-ink dark:border-paper hard-shadow">
+                    <div ref="container" class="reader-container h-[70vh] overflow-hidden"></div>
+                </div>
+
+                <!-- 工具栏 -->
+                <div class="reader-toolbar mt-4 border border-ink dark:border-paper bg-paper dark:bg-[#201f16] p-2 sm:p-3 flex flex-wrap items-center gap-2">
+                    <!-- 目录 -->
+                    <button v-if="tocItems.length > 0" class="np-btn np-btn-ghost !min-h-[36px] px-3 text-xs" @click="tocOpen = !tocOpen">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h10" />
+                        </svg>
+                        {{ tocOpen ? '收起目录' : '目录' }}
+                    </button>
+
+                    <!-- 上一页 / 下一页 -->
+                    <button class="np-btn np-btn-primary !min-h-[36px] px-4 text-xs" @click="prev">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                        </svg>
+                        上一页
+                    </button>
+                    <button class="np-btn np-btn-secondary !min-h-[36px] px-4 text-xs" @click="next">
+                        下一页
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </button>
+
+                    <div class="w-px h-6 bg-ink/20 dark:bg-paper/30 hidden sm:block" aria-hidden="true"></div>
+
+                    <!-- 字体调节（PDF 无字体概念） -->
+                    <div v-if="!isPdf" class="flex items-center gap-1" title="阅读字号">
+                        <button class="np-btn np-btn-ghost !min-h-[36px] px-3 text-xs" @click="changeFontSize(-1)" aria-label="减小字号">A−</button>
+                        <span class="font-mono text-xs text-neutral-500 dark:text-neutral-400 min-w-[2.5rem] text-center">{{ store.settings.fontSize }}</span>
+                        <button class="np-btn np-btn-ghost !min-h-[36px] px-3 text-xs" @click="changeFontSize(1)" aria-label="增大字号">A+</button>
+                    </div>
+
+                    <!-- PDF 缩放 -->
+                    <div v-if="isPdf" class="flex items-center gap-1" title="页面缩放">
+                        <button class="np-btn np-btn-ghost !min-h-[36px] px-3 text-xs" @click="zoomOut" aria-label="缩小">−</button>
+                        <button class="np-btn np-btn-ghost !min-h-[36px] px-3 text-xs min-w-[3.5rem]" @click="resetZoom" title="重置为适配宽度">{{ zoom }}%</button>
+                        <button class="np-btn np-btn-ghost !min-h-[36px] px-3 text-xs" @click="zoomIn" aria-label="放大">＋</button>
+                    </div>
+
+                    <div class="w-px h-6 bg-ink/20 dark:bg-paper/30 hidden sm:block" aria-hidden="true"></div>
+
+                    <!-- 背景色 -->
+                    <div class="relative">
+                        <button class="np-btn np-btn-ghost !min-h-[36px] px-3 text-xs" @click="showColors = !showColors">背景色</button>
+                        <div v-if="showColors" class="fixed inset-0 z-20" @click="showColors = false"></div>
+                        <div v-if="showColors" class="absolute right-0 bottom-full mb-2 z-30 w-60 border border-ink dark:border-paper bg-paper dark:bg-[#201f16] hard-shadow p-4">
+                            <p class="edition-label text-neutral-500 mb-3">页面色调 · PAGE TONE</p>
+                            <div class="flex gap-2 flex-wrap">
+                                <button
+                                    v-for="c in PRESET_COLORS"
+                                    :key="c.bg"
+                                    class="w-9 h-9 border border-ink/30 cursor-pointer hover:border-editorial transition-colors"
+                                    :style="{ backgroundColor: c.bg }"
+                                    :title="c.name"
+                                    @click="applyColors(c.bg, c.fg)"
+                                ></button>
+                            </div>
+                            <div class="mt-4 flex items-center gap-2 border-t border-ink/10 dark:border-paper/20 pt-3">
+                                <input type="color" class="w-9 h-9 p-0 border border-ink/30 cursor-pointer" :value="store.settings.bgColor" @input="onCustomColor" />
+                                <span class="text-xs font-mono text-neutral-500 dark:text-neutral-400">自定义背景</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 全屏 -->
+                    <button v-if="fullscreenSupported" class="np-btn np-btn-ghost !min-h-[36px] px-3 text-xs ml-auto" @click="toggleFullscreen">
+                        <svg v-if="!isFullscreen" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                        </svg>
+                        <svg v-else class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9V4m0 0H4m5 0L4 9m11 6v5m0 0h5m-5 0l5-5M4 15v5m0 0h5m-5 0l5-5" />
+                        </svg>
+                        {{ isFullscreen ? '退出全屏' : '全屏' }}
+                    </button>
+                </div>
+
+                <!-- 目录抽屉：覆盖在阅读台上（全屏时随 readerRoot 一起进入全屏） -->
+                <Transition name="toc-fade">
+                    <div v-if="tocOpen" class="fixed inset-0 z-40 bg-ink/50 dark:bg-black/60" @click="tocOpen = false"></div>
+                </Transition>
+                <Transition name="toc-slide">
+                    <aside
+                        v-if="tocOpen"
+                        class="toc-drawer fixed top-0 left-0 bottom-0 z-50 w-80 max-w-[85vw] border-r-4 border-ink dark:border-paper bg-paper dark:bg-[#201f16] flex flex-col shadow-[8px_0_0_0_rgba(17,17,17,0.15)] dark:shadow-[8px_0_0_0_rgba(249,249,247,0.2)]"
+                    >
+                        <header class="border-b-2 border-ink dark:border-paper px-4 py-3 flex items-center justify-between gap-3 shrink-0">
+                            <div class="min-w-0">
+                                <p class="edition-label text-editorial">目录 · CONTENTS</p>
+                                <h2 class="font-serif font-bold text-lg text-ink dark:text-paper mt-1 truncate">{{ bookTitle }}</h2>
+                            </div>
+                            <button class="np-btn np-btn-ghost !min-h-[32px] !min-w-[32px] !p-0 w-8 h-8 shrink-0" @click="tocOpen = false" aria-label="关闭目录">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </header>
+                        <nav class="flex-1 overflow-y-auto py-2">
+                            <button
+                                v-for="entry in flatToc"
+                                :key="entry.item.id"
+                                class="toc-entry flex items-center gap-2 w-full text-left px-4 py-2.5 text-sm border-b border-divider dark:border-paper/15 hover:bg-neutral-100 dark:hover:bg-neutral-700 cursor-pointer transition-colors"
+                                :class="entry.depth === 0 ? 'font-serif font-semibold text-ink dark:text-paper' : 'text-neutral-600 dark:text-neutral-300'"
+                                :style="{ paddingLeft: (12 + entry.depth * 16) + 'px' }"
+                                @click="jumpTo(entry.item)"
+                            >
+                                <span class="toc-seq font-mono text-[10px] text-editorial shrink-0">{{ String(entry.depth + 1).padStart(2, '0') }}</span>
+                                <span class="min-w-0 truncate">{{ entry.label }}</span>
+                            </button>
+                        </nav>
+                        <footer class="border-t border-ink/10 dark:border-paper/20 px-4 py-2 edition-label text-neutral-500 dark:text-neutral-400 text-[10px] shrink-0">
+                            点击条目跳转至对应位置
+                        </footer>
+                    </aside>
+                </Transition>
             </div>
-        </div>
+
+        <!-- 错误提示 -->
+        <p v-if="error" class="mt-4 text-center font-mono text-sm text-editorial border border-editorial/40 bg-paper dark:bg-[#201f16] px-4 py-2">
+            {{ error }}
+        </p>
     </div>
 </template>
 
@@ -175,13 +439,59 @@ async function prev() {
     flex-direction: column;
 }
 
-/* 全屏时：外层占满视口，阅读容器吃掉剩余高度（标题/按钮保留自然高度）
+/* 阅读区外框：硬阴影报纸剪贴感；背景跟随用户设置的自定义背景色 */
+.reader-frame {
+    background: var(--reader-bg, #fff);
+}
+
+/* TXT 段落排版（adapter 动态生成的 p 元素，需 :deep 穿透）；
+   字体沿用设计系统衬线正文，最大行宽限制成报纸栏宽，便于阅读 */
+.reader-container :deep(p) {
+    font-family: var(--font-body);
+    font-size: var(--reader-font-size, 16px);
+    line-height: 1.9;
+    max-width: 42rem;
+    margin: 0 auto 1.1em;
+    padding: 0 1.25rem;
+    text-align: justify;
+    overflow-wrap: break-word;
+}
+.reader-container :deep(p:last-child) {
+    margin-bottom: 0;
+}
+
+/* 目录抽屉滑动动画（报纸侧栏硬切入） */
+.toc-fade-enter-active,
+.toc-fade-leave-active {
+    transition: opacity 0.2s ease-out;
+}
+.toc-fade-enter-from,
+.toc-fade-leave-to {
+    opacity: 0;
+}
+.toc-slide-enter-active,
+.toc-slide-leave-active {
+    transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.toc-slide-enter-from,
+.toc-slide-leave-to {
+    transform: translateX(-100%);
+}
+
+/* 全屏时：外层占满视口，阅读容器吃掉剩余高度（报头/工具栏保留自然高度）
    背景跟随用户设置的自定义背景色 */
 .reader-root:fullscreen {
     width: 100vw;
     height: 100vh;
     background: var(--reader-bg, #fff);
     padding: 1rem;
+    overflow-y: auto;
+}
+.reader-root:fullscreen .reader-frame {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
 }
 .reader-root:fullscreen .reader-container {
     flex: 1;
