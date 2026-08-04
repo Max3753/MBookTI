@@ -18,6 +18,10 @@ from app.schemas.user import (
 from app.schemas.comment import CommentResponse, CommentCreateRequest, MyCommentResponse
 from app.schemas.announcement import AnnouncementResponse, AnnouncementCreateRequest
 from app.schemas.notification import NotificationResponse, NotificationCreateRequest, UnreadCountResponse
+from app.schemas.reading_record import (
+    ProgressSaveRequest,
+    ReadingRecordResponse,
+)
 
 __all__ = [
     "ApiResponse",
@@ -49,4 +53,6 @@ __all__ = [
     "NotificationResponse",
     "NotificationCreateRequest",
     "UnreadCountResponse",
+    "ProgressSaveRequest",
+    "ReadingRecordResponse",
 ]

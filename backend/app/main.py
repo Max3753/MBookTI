@@ -9,7 +9,7 @@ from app.database import AsyncSessionLocal
 from app.seed.mbti_types import init_mbti_types
 from app.core.exceptions import global_exception_handler, http_exception_handler, sqlalchemy_exception_handler
 
-from app.routers import mbti_types, recommendations, books, auth, comments, proxy, users, announcements, notifications
+from app.routers import mbti_types, recommendations, books, auth, comments, proxy, users, announcements, notifications, reader
 
 # 用户上传文件根目录（头像等）：backend/uploads
 UPLOAD_ROOT = Path(__file__).resolve().parent.parent / "uploads"
@@ -67,6 +67,7 @@ app.include_router(proxy.router)
 app.include_router(users.router)
 app.include_router(announcements.router)
 app.include_router(notifications.router)
+app.include_router(reader.router)
 
 # 用户上传文件静态托管（头像等）：/uploads/avatars/xxx.jpg
 app.mount("/uploads", StaticFiles(directory=UPLOAD_ROOT), name="uploads")

@@ -10,3 +10,4 @@ from app.models.favorite import UserBookFavorite
 from app.models.announcement import Announcement, AnnouncementAck
 from app.models.notification import Notification
 from app.models.password_reset_token import PasswordResetToken
+from app.models.reading_record import ReadingRecord

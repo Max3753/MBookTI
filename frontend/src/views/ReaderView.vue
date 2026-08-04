@@ -3,10 +3,28 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useReaderStore } from '../stores/reader'
 import { createAdapter } from '../adapters'
 import { useReaderFullscreen } from '../composables/useReaderFullscreen'
+import { useAuth } from '../composables/useAuth'
+import {
+    saveReaderProgress,
+    getReaderProgress,
+    getReadingHistory,
+    deleteReadingRecord,
+    type ReadingRecordItem,
+} from '../api/reader'
+import {
+    hashFile,
+    isFileSystemAccessSupported,
+    pickLocalBook,
+    saveFileHandle,
+    getFileHandle,
+    deleteFileHandle,
+    getFileFromHandle,
+} from '../utils/readerLocal'
 import type { ToCItem } from '../adapters/types'
 
 
 const store = useReaderStore()
+const { isLoggedIn } = useAuth()
 const fileInput = ref<HTMLInputElement | null>(null)
 const container = ref<HTMLElement | null>(null)
 // 全屏目标：容器 + 操作条的外层，全屏后仍能翻页/退出
@@ -15,6 +33,13 @@ const error = ref('')
 const bookTitle = ref('')
 const bookAuthor = ref('')
 const showColors = ref(false)
+
+// ---- 阅读历史（云端进度记录，仅登录用户）----
+const history = ref<ReadingRecordItem[]>([])
+const historyLoading = ref(false)
+const historyTotal = ref(0)
+// 当前打开书的内容哈希（book_key），进度云端同步的依据；空串 = 本地书
+const currentBookKey = ref('')
 
 // 目录抽屉
 const tocOpen = ref(false)
@@ -76,24 +101,106 @@ watch(() => [store.settings.bgColor, store.settings.fgColor] as const, ([bg, fg]
 
 onMounted(() => {
     store.loadSettings()   // 恢复持久化的阅读设置
+    if (isLoggedIn.value) void loadHistory()
 })
 
 // 离开阅读器时清理内存态：store.adapter 是全局单例，若不清理，
 // 从个人主页等页面 SPA 跳回 /reader 时会直接渲染阅读台（且容器空白，
 // 因为 onMounted 不再重新 renderTo），而不是空态主页；刷新后才会正常。
-// 进度已持久化到 localStorage，下次选同一文件会自动续读，不影响。
+// 进度已持久化（localStorage + 云端），下次选同一文件会自动续读，不影响。
 onUnmounted(() => {
     store.setAdapter(null, '')
+    currentBookKey.value = ''
 })
 
-function openPicker() { fileInput.value?.click() }
+// ---- 阅读历史 ----
+async function loadHistory() {
+    historyLoading.value = true
+    try {
+        const res = await getReadingHistory(1, 50)
+        history.value = res.data
+        historyTotal.value = res.total
+    } catch {
+        history.value = []
+        historyTotal.value = 0
+    } finally {
+        historyLoading.value = false
+    }
+}
 
-async function onFilePicked(event: Event) {
-    const input = event.target as HTMLInputElement
-    const file = input.files?.[0]
-    if (!file) return
+/** 续读：优先用持久化句柄（免重选）；否则打开选择器，选同一文件后按 book_key 自动续读 */
+async function continueReading(item: ReadingRecordItem) {
+    error.value = ''
+    // 1) 本设备有持久化句柄 → 直接读取续读
+    const handle = await getFileHandle(item.book_key)
+    if (handle) {
+        const file = await getFileFromHandle(handle)
+        if (file) {
+            await openBookFile(file, handle)
+            return
+        }
+    }
+    // 2) 无句柄/句柄失效 → 打开选择器让用户重选（选定后 hash 一致即自动恢复进度）
+    const picked = await pickLocalBook().catch(() => null)
+    if (!picked) return
+    await openBookFile(picked.file, picked.handle)
+}
+
+/** 删除阅读记录（仅云端进度；本地文件不受影响） */
+async function removeRecord(item: ReadingRecordItem) {
+    if (!window.confirm(`删除「${item.title}」的云端阅读记录？本地文件不受影响。`)) return
+    try {
+        await deleteReadingRecord(item.book_key)
+        await deleteFileHandle(item.book_key)
+        history.value = history.value.filter(h => h.book_key !== item.book_key)
+        historyTotal.value = Math.max(0, historyTotal.value - 1)
+    } catch (e: unknown) {
+        error.value = e instanceof Error ? e.message : '删除失败'
+    }
+}
+
+/** 历史条目进度文案：解析进度位置 + 总数 → 百分比（EPUB=章节序号/PDF=页码/TXT=段落） */
+function recordProgressText(item: ReadingRecordItem): string {
+    const total = item.progress_total
+    if (!item.progress || !total || total <= 0) return '已阅读'
+    let current = 0
+    try {
+        const pos = JSON.parse(item.progress)
+        if (typeof pos === 'number') {
+            current = item.format === 'txt' ? pos + 1 : Math.min(Math.floor(pos) + 1, total)
+        } else if (item.format === 'epub') {
+            const match = /epubcfi\(\/\d+\/(\d+)/.exec(String(pos))
+            current = match ? Math.min(Number(match[1]) + 1, total) : 0
+        }
+    } catch { /* 损坏数据按已阅读处理 */ }
+    if (current <= 0) return '已阅读'
+    const pct = Math.max(0, Math.min(100, Math.round((current / total) * 100)))
+    return `已读 ${pct}%`
+}
+
+function formatTime(iso: string): string {
+    try {
+        const d = new Date(iso)
+        const mins = Math.floor((Date.now() - d.getTime()) / 60000)
+        if (mins < 1) return '刚刚'
+        if (mins < 60) return `${mins} 分钟前`
+        const hours = Math.floor(mins / 60)
+        if (hours < 24) return `${hours} 小时前`
+        const days = Math.floor(hours / 24)
+        if (days < 7) return `${days} 天前`
+        return d.toLocaleDateString('zh-CN')
+    } catch {
+        return ''
+    }
+}
+
+/** 统一开书流程：本地 File → hash(book_key) → 渲染 → 恢复进度（localStorage 本机 + 云端跨设备） */
+async function openBookFile(file: File, handle?: FileSystemFileHandle) {
     error.value = ''
     try {
+        const bookKey = await hashFile(file)
+        if (handle) void saveFileHandle(bookKey, handle)   // 持久化句柄供下次无感续读
+
         const adapter = createAdapter(file)
         zoom.value = 100   // 新书重置缩放（PDF 专属）
         await adapter.load()                       // 先 load：metadata 才有值
@@ -105,28 +212,82 @@ async function onFilePicked(event: Event) {
             tocItems.value = []                        // 目录加载失败不阻塞开书
         }
         tocOpen.value = false
-        store.setAdapter(adapter, `${file.name}_${file.size}`)  // 再设 store（触发阅读台渲染）
+        currentBookKey.value = bookKey
+        store.setAdapter(adapter, bookKey)  // 设 store：内部从 localStorage 恢复本机进度
+
+        // 云端进度（跨设备权威）：登录且云端有记录时覆盖本机
+        if (isLoggedIn.value) {
+            try {
+                const prog = await getReaderProgress(bookKey)
+                const pos = prog.data.position
+                if (pos) {
+                    try { await adapter.setProgress(JSON.parse(pos)) } catch { /* 格式损坏忽略 */ }
+                }
+            } catch { /* 404/网络失败：无云端记录，用本机进度 */ }
+        }
+
         await nextTick()                             // 等容器挂载（阅读台在 v-else 分支里）再渲染内容
         if (container.value) await adapter.renderTo(container.value)
         await adapter.setTheme?.(store.settings.bgColor, store.settings.fgColor)  // 应用当前背景色
-        store.saveProgress()
+        persistProgress()
         refreshProgress()
     } catch (e: unknown) {
         error.value = e instanceof Error ? e.message : '打开失败'
         store.setAdapter(null, '')
-    } finally {
-        input.value = ''                           // 重置 input，允许重复选同一文件
+        currentBookKey.value = ''
     }
+}
+
+/** 进度保存：localStorage（本机）+ 云端（登录时，按 book_key upsert） */
+function persistProgress() {
+    store.saveProgress()
+    if (isLoggedIn.value && currentBookKey.value && store.adapter) {
+        const pos = store.adapter.getProgress()
+        void saveReaderProgress({
+            book_key: currentBookKey.value,
+            title: bookTitle.value || store.adapter.metadata.title || '未命名书籍',
+            author: bookAuthor.value || store.adapter.metadata.author,
+            format: store.adapter.format,
+            progress: JSON.stringify(pos),
+            progress_total: store.adapter.getTotal() || null,
+        }).catch(() => { /* 静默：网络失败不影响阅读 */ })
+    }
+}
+
+/** 选书入口：优先 File System Access API（可持久化句柄）；否则回退 <input> */
+async function openPicker() {
+    error.value = ''
+    if (isFileSystemAccessSupported()) {
+        try {
+            const picked = await pickLocalBook()
+            if (!picked) return   // 用户取消
+            await openBookFile(picked.file, picked.handle)
+            return
+        } catch (e: unknown) {
+            error.value = e instanceof Error ? e.message : '打开文件失败'
+            return
+        }
+    }
+    fileInput.value?.click()
+}
+
+async function onFilePicked(event: Event) {
+    const input = event.target as HTMLInputElement
+    const file = input.files?.[0]
+    if (!file) return
+    input.value = ''                           // 立即重置，允许重复选同一文件
+    error.value = ''
+    await openBookFile(file)
 }
 
 async function next() {
     try { await store.adapter?.next() } catch (e: unknown) { error.value = e instanceof Error ? e.message : '翻页失败' }
-    store.saveProgress()
+    persistProgress()
     refreshProgress()
 }
 async function prev() {
     try { await store.adapter?.prev() } catch (e: unknown) { error.value = e instanceof Error ? e.message : '翻页失败' }
-    store.saveProgress()
+    persistProgress()
     refreshProgress()
 }
 
@@ -265,9 +426,56 @@ const formatLabel = computed(() => {
                             选择电子书文件
                         </button>
                         <p class="mt-4 text-center edition-label text-neutral-500 dark:text-neutral-400">
-                            阅读进度自动保存 · 支持续读
+                            文件留本地 · 进度云端同步 · 换设备续读
                         </p>
                     </div>
+                </div>
+
+                <!-- 阅读历史：登录用户可见（云端进度记录；文件在本地） -->
+                <div v-if="isLoggedIn" class="max-w-2xl mx-auto mt-10 text-left">
+                    <div class="flex items-center justify-between border-b-2 border-ink dark:border-paper pb-3 mb-4">
+                        <div>
+                            <p class="edition-label text-editorial">最近阅读 · RECENT READS</p>
+                            <h2 class="font-serif text-xl font-bold text-ink dark:text-paper mt-1">
+                                {{ historyTotal }} 本书 · 进度云端同步
+                            </h2>
+                        </div>
+                    </div>
+
+                    <div v-if="historyLoading" class="py-8 text-center edition-label text-neutral-500">
+                        阅读记录加载中…
+                    </div>
+
+                    <div v-else-if="history.length === 0" class="py-8 text-center border border-dashed border-ink/30 dark:border-paper/30">
+                        <p class="font-serif italic text-neutral-500 dark:text-neutral-400">还没有阅读记录，选一本电子书开始吧</p>
+                    </div>
+
+                    <ul v-else class="space-y-3">
+                        <li
+                            v-for="item in history"
+                            :key="item.book_key"
+                            class="np-card hard-shadow p-4 flex items-center gap-4 hover:border-editorial transition-colors"
+                        >
+                            <!-- 封面位：无封面文件，显示格式徽标 -->
+                            <div class="w-12 h-16 shrink-0 border border-ink dark:border-paper bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center overflow-hidden">
+                                <span class="edition-label text-editorial">{{ item.format.toUpperCase() }}</span>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <h3 class="font-serif font-semibold text-ink dark:text-paper truncate">{{ item.title }}</h3>
+                                <p class="edition-label text-neutral-500 dark:text-neutral-400 mt-1">
+                                    {{ item.format.toUpperCase() }} · {{ recordProgressText(item) }} · {{ formatTime(item.updated_at) }}
+                                </p>
+                            </div>
+                            <div class="flex gap-2 shrink-0">
+                                <button class="np-btn np-btn-primary !min-h-[32px] !px-3 text-xs cursor-pointer" @click="continueReading(item)">
+                                    续读
+                                </button>
+                                <button class="np-btn np-btn-ghost !min-h-[32px] !px-3 text-xs cursor-pointer" @click="removeRecord(item)">
+                                    移除
+                                </button>
+                            </div>
+                        </li>
+                    </ul>
                 </div>
             </section>
 
