@@ -128,7 +128,8 @@ async function loadHistory() {
     }
 }
 
-/** 续读：优先用持久化句柄（免重选）；否则打开选择器，选同一文件后按 book_key 自动续读 */
+/** 续读：优先用持久化句柄（免重选）；否则复用 openPicker（FS Access 优先，不支持时回退 <input>），
+ *  选定同一文件（内容 hash 一致）即自动恢复进度。 */
 async function continueReading(item: ReadingRecordItem) {
     error.value = ''
     // 1) 本设备有持久化句柄 → 直接读取续读
@@ -140,10 +141,11 @@ async function continueReading(item: ReadingRecordItem) {
             return
         }
     }
-    // 2) 无句柄/句柄失效 → 打开选择器让用户重选（选定后 hash 一致即自动恢复进度）
-    const picked = await pickLocalBook().catch(() => null)
-    if (!picked) return
-    await openBookFile(picked.file, picked.handle)
+    // 2) 无句柄/句柄失效（如 http://IP 非安全上下文无 File System Access API）→
+    //    复用 openPicker：支持 FS Access 时用 picker（可重新持久化句柄），
+    //    否则回退 <input> 选择器。⚠️ 不能直接调 pickLocalBook()：它在无 FS Access
+    //    的环境永远返回 null，会导致点击无任何反应。
+    await openPicker()
 }
 
 /** 删除阅读记录（仅云端进度；本地文件不受影响） */
@@ -254,18 +256,23 @@ function persistProgress() {
     }
 }
 
-/** 选书入口：优先 File System Access API（可持久化句柄）；否则回退 <input> */
+/** 选书入口：优先 File System Access API（可持久化句柄）；任何失败都回退 <input>，
+ *  保证 http://IP 等非安全上下文（无 FS Access）或 API 抛错时仍能选书。 */
 async function openPicker() {
     error.value = ''
     if (isFileSystemAccessSupported()) {
         try {
             const picked = await pickLocalBook()
-            if (!picked) return   // 用户取消
-            await openBookFile(picked.file, picked.handle)
+            if (picked) {
+                await openBookFile(picked.file, picked.handle)
+                return
+            }
+            // 用户取消 → 不打开 input，保持现状
             return
         } catch (e: unknown) {
-            error.value = e instanceof Error ? e.message : '打开文件失败'
-            return
+            // FS Access 异常（SecurityError/NotAllowedError 等，如用户激活过期）→ 静默回退 input，
+            // 不打断选书流程；若 input 也失败会在 onFilePicked/openBookFile 中报错
+            console.warn('[reader] File System Access 选择失败，回退 <input>:', e)
         }
     }
     fileInput.value?.click()
