@@ -5,7 +5,9 @@ import type { IBookAdapter, BookFormat } from '../adapters/types'
 // 阅读设置
 export interface ReaderSettings {
     fontSize: number
-    theme: 'light' | 'dark' | 'sepia'
+    theme: 'light' | 'dark' | 'sepia'   // 保留兼容旧存档；实际颜色以 bgColor/fgColor 为准
+    bgColor: string   // 阅读背景色（hex）
+    fgColor: string   // 阅读文字色（hex）
 }
 
 export const useReaderStore = defineStore('reader', () => {
@@ -19,7 +21,9 @@ export const useReaderStore = defineStore('reader', () => {
     // --阅读设置（独立持久化，与进度分开）--
     const settings = ref<ReaderSettings>({
         fontSize: 16,
-        theme: 'light'
+        theme: 'light',
+        bgColor: '#ffffff',
+        fgColor: '#1f2937',
     })
 
     /** 唯一入口：换书。销毁旧书 → 换新 → 自动恢复进度 */
@@ -54,12 +58,21 @@ export const useReaderStore = defineStore('reader', () => {
         const raw = localStorage.getItem('reader_settings')
         if (!raw) return
         try {
-            Object.assign(settings.value, JSON.parse(raw))
+            const saved = JSON.parse(raw)
+            // 旧存档可能缺 bgColor/fgColor，合并后补默认值
+            Object.assign(settings.value, { bgColor: '#ffffff', fgColor: '#1f2937' }, saved)
         } catch {/* 损坏数据静默忽略 */}
+    }
+
+    /** 更新背景/文字色并持久化 */
+    function setColors(bgColor: string, fgColor: string) {
+        settings.value.bgColor = bgColor
+        settings.value.fgColor = fgColor
+        saveSettings()
     }
 
     return {
         adapter, format, settings,
-        setAdapter, saveProgress, loadProgress, saveSettings, loadSettings
+        setAdapter, saveProgress, loadProgress, saveSettings, loadSettings, setColors
     }
 })

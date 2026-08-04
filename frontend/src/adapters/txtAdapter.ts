@@ -169,6 +169,13 @@ export function createTxtAdapter(file: File): IBookAdapter {
         renderCurrent()
     }
 
+    // 应用背景/文字色（样式在容器上，renderCurrent 重建内容不影响）
+    function setTheme(bgColor: string, fgColor: string) {
+        if (!container) return
+        container.style.backgroundColor = bgColor
+        container.style.color = fgColor
+    }
+
     function destroy() {
         container = null   // 断开引用，便于 GC
     }
@@ -184,6 +191,7 @@ export function createTxtAdapter(file: File): IBookAdapter {
         next,
         prev,
         relayout,
+        setTheme,
         destroy,
         getTotal
     }

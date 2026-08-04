@@ -93,6 +93,22 @@ export function createEpubAdapter(input: File | string): IBookAdapter {
     async function next() { await rendition?.next() }
     async function prev() { await rendition?.prev() }
 
+    // 应用背景/文字色：注入 body 级 !important 规则压过内容自带样式。
+    // 不能用 themes.override —— 它只设 documentElement，EPUB 内容 body 的自带背景会盖住它。
+    // 用 register(rules) + select：换章节时 epubjs 的 inject 钩子会对 rules 主题自动重新注入；
+    // 换色时同 key 覆盖，register 内部对已注入主题执行 update 替换。
+    function setTheme(bgColor: string, fgColor: string) {
+        const themes = rendition?.themes
+        if (!themes) return
+        themes.register('reader-custom-theme', {
+            body: {
+                'background-color': `${bgColor} !important`,
+                'color': `${fgColor} !important`,
+            },
+        })
+        themes.select('reader-custom-theme')
+    }
+
     function getTotal(): number {
         return book?.spine?.length ?? 0    // EPUB 总"页数"动态变化，返回章节数
     }
@@ -107,6 +123,6 @@ export function createEpubAdapter(input: File | string): IBookAdapter {
     return {
         metadata, format: 'epub', load, getToC,
         getProgress, setProgress, renderTo,
-        next, prev, getTotal, destroy,
+        next, prev, setTheme, getTotal, destroy,
     }
 }

@@ -49,6 +49,12 @@ export interface IBookAdapter {
      */
     relayout?(): void | Promise<void>
 
+    /**
+     * 应用阅读背景色/文字色（可选；由阅读器在设置变更或渲染后调用）。
+     * TXT 设容器样式；EPUB 通过 rendition.themes.override 覆盖 iframe 内文档。
+     */
+    setTheme?(bgColor: string, fgColor: string): void | Promise<void>
+
     /** 释放资源（销毁 rendition、撤销 ObjectURL 等）*/
     destroy(): void
 }
