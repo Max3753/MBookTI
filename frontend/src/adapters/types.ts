@@ -55,6 +55,12 @@ export interface IBookAdapter {
      */
     setTheme?(bgColor: string, fgColor: string): void | Promise<void>
 
+    /**
+     * 设置缩放百分比（可选；PDF 专属，100 = 适配容器宽度）。
+     * 其余格式默认忽略（无缩放概念）。
+     */
+    setZoom?(percent: number): void | Promise<void>
+
     /** 释放资源（销毁 rendition、撤销 ObjectURL 等）*/
     destroy(): void
 }

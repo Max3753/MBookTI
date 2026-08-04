@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useReaderStore } from '../stores/reader'
 import { createAdapter } from '../adapters'
 import { useReaderFullscreen } from '../composables/useReaderFullscreen'
@@ -14,6 +14,18 @@ const error = ref('')
 const bookTitle = ref('')
 const total = ref(0)
 const showColors = ref(false)
+
+// PDF 缩放（仅 PDF 显示控件；100 = 适配容器宽度）
+const ZOOM_MIN = 50
+const ZOOM_MAX = 200
+const ZOOM_STEP = 25
+const zoom = ref(100)
+const isPdf = computed(() => store.adapter?.format === 'pdf')
+
+function applyZoom() { void store.adapter?.setZoom?.(zoom.value) }
+function zoomIn() { zoom.value = Math.min(ZOOM_MAX, zoom.value + ZOOM_STEP); applyZoom() }
+function zoomOut() { zoom.value = Math.max(ZOOM_MIN, zoom.value - ZOOM_STEP); applyZoom() }
+function resetZoom() { zoom.value = 100; applyZoom() }
 
 const { isFullscreen, isSupported: fullscreenSupported, toggle: toggleFullscreen } = useReaderFullscreen(readerRoot)
 
@@ -69,6 +81,7 @@ async function onFilePicked(event: Event) {
     error.value = ''
     try {
         const adapter = createAdapter(file)
+        zoom.value = 100   // 新书重置缩放（PDF 专属）
         await adapter.load()                       // 先 load：metadata 才有值
         bookTitle.value = adapter.metadata.title   // 书名现在能显示了
         total.value = adapter.getTotal()
@@ -117,6 +130,12 @@ async function prev() {
             <div v-if="store.adapter" class="mt-6 flex gap-4 items-center">
                 <button class="np-btn np-btn-ghost" @click="prev">上一页</button>
                 <button class="np-btn" @click="next">下一页</button>
+
+                <div v-if="isPdf" class="flex items-center gap-1" title="页面缩放">
+                    <button class="np-btn np-btn-ghost !min-h-[36px] px-3 text-xs" @click="zoomOut" aria-label="缩小">−</button>
+                    <button class="np-btn np-btn-ghost !min-h-[36px] px-3 text-xs min-w-[3.5rem]" @click="resetZoom" title="重置为适配宽度">{{ zoom }}%</button>
+                    <button class="np-btn np-btn-ghost !min-h-[36px] px-3 text-xs" @click="zoomIn" aria-label="放大">＋</button>
+                </div>
 
                 <div class="relative">
                     <button class="np-btn np-btn-ghost !min-h-[36px] px-3 text-xs" @click="showColors = !showColors">背景色</button>

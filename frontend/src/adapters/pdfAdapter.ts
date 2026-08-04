@@ -3,8 +3,9 @@ import type { IBookAdapter, BookMetadata, ToCItem, ProgressPosition } from './ty
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
 // PDF 适配器：基于 pdfjs-dist（懒加载，worker 用 ?url 交给 Vite 打包为独立 asset）。
-// 进度 = 页码（number，与 TXT 同属数字进度，直接兼容存档）。
+// 进度 = 页码（number，与 TXT 同属页码进度，直接兼容存档）。
 // 页面按容器宽度等比缩放（含 devicePixelRatio 提升清晰度），超高页在容器内滚动。
+// 缩放：zoom 百分比（100 = 适配容器宽度），放大后容器双向滚动。
 export function createPdfAdapter(file: File): IBookAdapter {
     let pdfjs: typeof import('pdfjs-dist') | null = null
     let pdfDoc: PDFDocumentProxy | null = null
@@ -13,6 +14,7 @@ export function createPdfAdapter(file: File): IBookAdapter {
     let renderTask: RenderTask | null = null
     let currentPage = 1
     let pendingPage: number | null = null
+    let zoom = 100   // 缩放百分比：100 = 适配容器宽度
     const metadata: BookMetadata = {
         title: file.name.replace(/\.pdf$/i, ''),
         author: '未知作者',
@@ -51,10 +53,9 @@ export function createPdfAdapter(file: File): IBookAdapter {
     async function renderTo(element: HTMLElement) {
         container = element
         element.innerHTML = ''
-        element.style.overflowY = 'auto'   // PDF 页面超高时容器内滚动（其余格式为 hidden）
+        element.style.overflow = 'auto'   // PDF 放大后页面超高/超宽，容器内双向滚动（其余格式为 hidden）
         canvas = document.createElement('canvas')
         canvas.style.display = 'block'
-        canvas.style.width = '100%'
         element.appendChild(canvas)
         if (pdfDoc && pendingPage !== null) {
             if (pendingPage >= 1 && pendingPage <= pdfDoc.numPages) currentPage = pendingPage
@@ -69,10 +70,14 @@ export function createPdfAdapter(file: File): IBookAdapter {
         const page = await pdfDoc.getPage(currentPage)
         const width = container.clientWidth || 800
         const dpr = window.devicePixelRatio || 1
-        const scale = (width / page.getViewport({ scale: 1 }).width) * dpr
+        // CSS 宽度 = 容器宽 × 缩放比；位图像素再乘 dpr 保证清晰
+        const cssWidth = width * (zoom / 100)
+        const scale = (cssWidth / page.getViewport({ scale: 1 }).width) * dpr
         const viewport = page.getViewport({ scale })
         canvas.width = Math.floor(viewport.width)
         canvas.height = Math.floor(viewport.height)
+        canvas.style.width = `${cssWidth}px`
+        canvas.style.height = 'auto'   // 保持宽高比
         const ctx = canvas.getContext('2d')
         if (!ctx) return
         const task = page.render({ canvasContext: ctx, viewport })
@@ -119,8 +124,16 @@ export function createPdfAdapter(file: File): IBookAdapter {
         }
     }
 
-    // 容器尺寸变化（全屏/窗口 resize）：按新宽度重渲染当前页
+    // 容器尺寸变化（全屏/窗口 resize）：按新宽度重渲染当前页（保持当前缩放）
     async function relayout() {
+        await renderCurrent()
+    }
+
+    // 缩放百分比（50–200）：重渲染当前页
+    async function setZoom(percent: number) {
+        const clamped = Math.min(200, Math.max(50, Math.round(percent)))
+        if (clamped === zoom) return
+        zoom = clamped
         await renderCurrent()
     }
 
@@ -135,6 +148,6 @@ export function createPdfAdapter(file: File): IBookAdapter {
     return {
         metadata, format: 'pdf', load, getToC,
         getProgress, getTotal, setProgress, renderTo,
-        next, prev, relayout, destroy,
+        next, prev, relayout, setZoom, destroy,
     }
 }
