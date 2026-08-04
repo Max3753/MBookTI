@@ -96,7 +96,7 @@ async function prev() {
 
 <template>
     <div class="max-w-3xl mx-auto px-4 py-8">
-        <input ref="fileInput" type="file" accept=".txt,.epub" class="hidden" @change="onFilePicked" />
+        <input ref="fileInput" type="file" accept=".txt,.epub,.pdf" class="hidden" @change="onFilePicked" />
         <div>
             <button class="np-btn np-btn-primary" @click="openPicker">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -104,7 +104,7 @@ async function prev() {
                 </svg>
                 选择电子书文件
             </button>
-            <p class="text-xs text-gray-500 mt-2">支持 EPUB / TXT 格式 · 阅读进度自动保存</p>
+            <p class="text-xs text-gray-500 mt-2">支持 EPUB / PDF / TXT 格式 · 阅读进度自动保存</p>
         </div>
 
         <p v-if="error" class="text-red-500 mt-2">{{ error }}</p>
