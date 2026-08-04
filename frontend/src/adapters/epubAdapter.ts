@@ -46,8 +46,34 @@ export function createEpubAdapter(input: File | string): IBookAdapter {
         rendition.on('relocated', (loc: any) => {
             currentCfi = loc?.start?.cfi ?? ''
         })
-        // await：display 失败会抛出（在 ReaderView 显示错误），不再静默吞掉
-        await rendition.display(pendingCfi ?? undefined)
+
+        // spine 为空（OPF 解析异常/损坏）：提前给友好错误，避免落到难懂的 "No Section Found"
+        if (!book.spine?.length) {
+            throw new Error('EPUB 文件损坏：未解析到任何章节')
+        }
+
+        // 进度 CFI 预校验：spine.get 对 CFI 用 spinePos 索引章节，
+        // 进度来自旧版本/内容变化/畸形 CFI 时可能匹配不到 → 降级从第一章开始，不阻塞打开
+        let target: string | undefined
+        if (pendingCfi) {
+            try {
+                if (book.spine.get(pendingCfi)) target = pendingCfi
+            } catch {
+                target = undefined   // 畸形 CFI 也不阻塞打开
+            }
+        }
+
+        try {
+            // await：display 失败会抛出（在 ReaderView 显示错误），不再静默吞掉
+            await rendition.display(target)
+        } catch (e) {
+            // 兜底：带 CFI 显示失败（epubjs 解析边缘情况）→ 去掉进度重试第一章
+            if (target) {
+                await rendition.display()
+            } else {
+                throw e
+            }
+        }
         pendingCfi = null
     }
 
