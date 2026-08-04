@@ -1,9 +1,17 @@
 import jschardet from 'jschardet'
 import type { IBookAdapter, BookMetadata, ToCItem, ProgressPosition } from './types'
 
+// 一页 = 一段连续的段落范围（含两端）。进度仍以「段落索引」持久化，
+// 与旧存档（reader_progress_* 存的数字）完全兼容，无需迁移。
+interface PageRange {
+    start: number
+    end: number
+}
+
 export function createTxtAdapter(file: File): IBookAdapter {
     let paragraphs: string[] = []
-    let currentIndex = 0
+    let pages: PageRange[] = []
+    let currentPage = 0
     let container: HTMLElement | null = null
     let title = file.name.replace(/\.txt$/i, '')
 
@@ -41,22 +49,84 @@ export function createTxtAdapter(file: File): IBookAdapter {
         return Promise.resolve(items)
     }
 
-    function renderTo(element: HTMLElement) {
-        container = element
-        renderCurrent()
+    /**
+     * 按容器可视高度把段落切成「一页多段」。
+     * 逐段 append 后检测 scrollHeight 溢出，溢出处即为页边界。
+     * 计算期间临时隐藏容器，避免中间状态闪烁。
+     */
+    function computePages() {
+        pages = []
+        if (!container || paragraphs.length === 0) return
+
+        const prevVisibility = container.style.visibility
+        container.style.visibility = 'hidden'
+        container.innerHTML = ''
+
+        const height = container.clientHeight
+        let start = 0
+        for (let i = 0; i < paragraphs.length; i++) {
+            const p = document.createElement('p')
+            p.textContent = paragraphs[i]  // textContent 防 XSS
+            container.appendChild(p)
+
+            if (container.scrollHeight > height + 1) {
+                if (i === start) {
+                    // 单段就超高（超长段）：独占一页，强制推进避免死循环
+                    pages.push({ start: i, end: i })
+                    container.innerHTML = ''
+                    start = i + 1
+                } else {
+                    // 本段放不下：前一段为止成一页，本段开新页
+                    pages.push({ start, end: i - 1 })
+                    container.innerHTML = ''
+                    const next = document.createElement('p')
+                    next.textContent = paragraphs[i]
+                    container.appendChild(next)
+                    start = i
+                }
+            }
+        }
+        if (start < paragraphs.length) {
+            pages.push({ start, end: paragraphs.length - 1 })
+        }
+
+        container.style.visibility = prevVisibility
+    }
+
+    /** 找包含指定段落的页；找不到返回最后一页 */
+    function locatePage(paraIndex: number): number {
+        for (let i = 0; i < pages.length; i++) {
+            if (paraIndex >= pages[i].start && paraIndex <= pages[i].end) return i
+        }
+        return pages.length > 0 ? pages.length - 1 : 0
     }
 
     function renderCurrent() {
         if (!container) return
-        // 只渲染当前段落（配合上下键/点击翻段；虚拟滚动后续优化）
+        const page = pages[currentPage]
+        if (!page) return
         container.innerHTML = ''
-        const p = document.createElement('p')
-        p.textContent = paragraphs[currentIndex] ?? ''  // textContent 防 XSS
-        container.appendChild(p)
+        const frag = document.createDocumentFragment()
+        for (let i = page.start; i <= page.end; i++) {
+            const p = document.createElement('p')
+            p.textContent = paragraphs[i] ?? ''  // textContent 防 XSS
+            frag.appendChild(p)
+        }
+        container.appendChild(frag)
+    }
+
+    function renderTo(element: HTMLElement) {
+        container = element
+        computePages()
+        if (pendingIndex !== null && pendingIndex < paragraphs.length) {
+            currentPage = locatePage(pendingIndex)
+            pendingIndex = null
+        }
+        renderCurrent()
     }
 
     function getProgress(): ProgressPosition {
-        return currentIndex
+        return pages[currentPage]?.start ?? 0
     }
 
     function getTotal(): number {
@@ -65,35 +135,38 @@ export function createTxtAdapter(file: File): IBookAdapter {
 
     let pendingIndex: number | null = null
 
-    // setProgress 改为：
+    // 进度 = 段落索引（页首段）；旧存档数字直接兼容
     function setProgress(position: ProgressPosition) {
         if (typeof position !== 'number' || position < 0) return
-        if (position < paragraphs.length) {
-            currentIndex = position
+        if (pages.length === 0) {
+            pendingIndex = position        // 还没渲染过，暂存，renderTo 时应用
+        } else if (position < paragraphs.length) {
+            currentPage = locatePage(position)
             renderCurrent()
-        } else {
-            pendingIndex = position        // 段落还没加载完，暂存
         }
     }
 
-    // load() 末尾追加（加载完成后应用暂存进度）：
-    if (pendingIndex !== null && pendingIndex < paragraphs.length) {
-        currentIndex = pendingIndex
-        pendingIndex = null
-    }
-
     function next() {
-        if (currentIndex < paragraphs.length - 1) {
-            currentIndex++
+        if (currentPage < pages.length - 1) {
+            currentPage++
             renderCurrent()
         }
     }
 
     function prev() {
-        if (currentIndex > 0) {
-            currentIndex--
+        if (currentPage > 0) {
+            currentPage--
             renderCurrent()
         }
+    }
+
+    // 容器尺寸变化（全屏/窗口 resize）后重排：保持当前页首段锚点不变
+    function relayout() {
+        if (!container) return
+        const anchor = pages[currentPage]?.start ?? 0
+        computePages()
+        currentPage = locatePage(anchor)
+        renderCurrent()
     }
 
     function destroy() {
@@ -110,6 +183,7 @@ export function createTxtAdapter(file: File): IBookAdapter {
         renderTo,
         next,
         prev,
+        relayout,
         destroy,
         getTotal
     }

@@ -43,6 +43,12 @@ export interface IBookAdapter {
     next(): void | Promise<void>
     prev(): void | Promise<void>
 
+    /**
+     * 容器尺寸变化后重排（可选；全屏/窗口 resize 时由阅读器调用）。
+     * TXT 重算分页并保持当前进度；EPUB/PDF 依赖自身响应式布局可省略。
+     */
+    relayout?(): void | Promise<void>
+
     /** 释放资源（销毁 rendition、撤销 ObjectURL 等）*/
     destroy(): void
 }
