@@ -102,8 +102,37 @@ export function createEpubAdapter(input: File | string): IBookAdapter {
         }
     }
 
-    async function next() { await rendition?.next() }
-    async function prev() { await rendition?.prev() }
+    async function next() { await turn(1) }
+    async function prev() { await turn(-1) }
+
+    // ---- 翻页串行锁 ----
+    // epubjs 的 rendition.next()/prev() 走内部异步队列（q.enqueue），跨章节时还要
+    // 重建 iframe/重算 layout，且章节内翻页是动画式滚动——promise 可能在动画中途
+    // resolve。若翻页未真正完成就放行下一次请求，两次翻页会基于"动画中"的位置
+    // 并发计算 → 出现前后来回跳。
+    // 双保险：
+    //   1. turning（promise 完成态锁）：任意时刻最多一个翻页在途；
+    //   2. MIN_TURN_GAP（最短间隔锁）：即使 promise 提前 resolve，也强制等待
+    //      动画窗口结束，杜绝连点时下一次翻页落在动画中间。
+    // 点击/键盘/按钮统一经过 next/prev 包装，全部受此锁约束。
+    let turning = false
+    let lastTurnAt = 0
+    const MIN_TURN_GAP = 400   // 覆盖 epubjs 滚动/章节切换动画时长（ms）
+
+    async function turn(dir: 1 | -1) {
+        if (turning || !rendition) return
+        const now = Date.now()
+        if (now - lastTurnAt < MIN_TURN_GAP) return
+        turning = true
+        lastTurnAt = now
+        try {
+            await (dir > 0 ? rendition.next() : rendition.prev())
+        } catch {
+            /* 翻页竞态/边缘错误忽略 */
+        } finally {
+            turning = false
+        }
+    }
 
     // 应用背景/文字色 + 排版：注入 body 级 !important 规则压过内容自带样式。
     // 不能用 themes.override —— 它只设 documentElement，EPUB 内容 body 的自带背景会盖住它。
@@ -142,12 +171,10 @@ export function createEpubAdapter(input: File | string): IBookAdapter {
     // 否则按横向坐标分区翻页。与 TXT 覆盖层规则完全一致：
     //   左 1/3 → 上一页；右 2/3（含中央）→ 下一页；无死区。
     // 关键细节：
-    //   1. rendition.next()/prev() 走异步队列（q.enqueue），连续快速点击会并发翻页，
-    //      且分区计算在翻页动画中漂移 → 出现前后页来回跳。用 250ms 翻页锁串行化。
+    //   1. 翻页走 turn()（promise 完成态锁）：连点不会并发翻页，杜绝来回跳。
     //   2. 用 mousedown 记录起点 + click 比对位移：拖选文本/滚动后松手不触发翻页。
     //   3. 仅桌面端（pointer:fine）启用；移动端 EPUB 走 epubjs 自带滑动手势。
     const tapZonedDocs = new WeakSet<Document>()
-    let lastTurnAt = 0
 
     function attachTapZones() {
         if (!window.matchMedia?.('(pointer: fine)').matches) return
@@ -167,18 +194,15 @@ export function createEpubAdapter(input: File | string): IBookAdapter {
             doc.addEventListener('click', (e: MouseEvent) => {
                 // 链接放行：epubjs 内部对 iframe 链接有自己的处理（目录/脚注跳转）
                 if ((e.target as HTMLElement | null)?.closest?.('a')) return
-                const now = Date.now()
-                if (now - lastTurnAt < 250) return    // 翻页锁：防连点并发翻页
                 if (Math.abs(e.clientX - startPos.x) + Math.abs(e.clientY - startPos.y) > 8) return  // 拖拽/滚动后松手不翻页
                 const width = doc.documentElement?.clientWidth ?? 0
                 if (!width) return
                 const x = e.clientX
-                lastTurnAt = now
                 e.preventDefault()
                 if (x < width / 3) {
-                    void rendition?.prev().catch(() => { /* 翻页竞态错误忽略 */ })
+                    void prev()
                 } else {
-                    void rendition?.next().catch(() => { /* 翻页竞态错误忽略 */ })
+                    void next()
                 }
             })
         }
