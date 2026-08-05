@@ -55,6 +55,17 @@ export async function getBookDetail(bookId: number) {
     return res.data
 }
 
+// 书籍评分接口
+export async function rateBook(bookId: number, rating: number) {
+    const res = await api.post(`/books/${bookId}/rating`, { rating })
+    return res.data
+}
+
+export async function unrateBook(bookId: number) {
+    const res = await api.delete(`/books/${bookId}/rating`)
+    return res.data
+}
+
 // 书评接口（挂书）
 export async function getBookComments(bookId: number) {
     const res = await api.get(`/comments/book/${bookId}`)
@@ -77,7 +88,7 @@ export async function getMyProfile() {
     return res.data
 }
 
-export async function updateMyProfile(payload: { username?: string; avatar_url?: string; mbti_type_id?: number | null }) {
+export async function updateMyProfile(payload: { username?: string; avatar_url?: string; mbti_type_id?: number | null; is_profile_public?: boolean }) {
     const res = await api.put('/users/me', payload)
     return res.data
 }
@@ -114,6 +125,44 @@ export async function toggleFavorite(bookId: number) {
 
 export async function getMyFavorites() {
     const res = await api.get('/users/me/favorites')
+    return res.data
+}
+
+// 公开用户主页接口（无需登录，可查看任意用户）
+export async function getPublicUserProfile(userId: number) {
+    const res = await api.get(`/users/${userId}`)
+    return res.data
+}
+
+export async function getUserComments(userId: number, page = 1, pageSize = 20) {
+    const res = await api.get(`/users/${userId}/comments`, { params: { page, page_size: pageSize } })
+    return res.data
+}
+
+export async function getUserFavorites(userId: number) {
+    const res = await api.get(`/users/${userId}/favorites`)
+    return res.data
+}
+
+// 关注接口（需登录）
+export async function toggleFollow(userId: number) {
+    const res = await api.post(`/users/${userId}/follow`)
+    return res.data
+}
+
+export async function getFollowers(userId: number, page = 1, pageSize = 20) {
+    const res = await api.get(`/users/${userId}/followers`, { params: { page, page_size: pageSize } })
+    return res.data
+}
+
+export async function getFollowing(userId: number, page = 1, pageSize = 20) {
+    const res = await api.get(`/users/${userId}/following`, { params: { page, page_size: pageSize } })
+    return res.data
+}
+
+// 社区动态接口（公开）
+export async function getCommunityFeed(limit = 20) {
+    const res = await api.get('/community/feed', { params: { limit } })
     return res.data
 }
 

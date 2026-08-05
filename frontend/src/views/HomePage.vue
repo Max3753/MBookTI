@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getMbtiTypes, getUnackedAnnouncements, ackAnnouncement } from '../api';
+import { getMbtiTypes, getUnackedAnnouncements, ackAnnouncement, getCommunityFeed } from '../api';
+import { resolveAssetUrl } from '../api/config'
 import { t } from '../composables/useI18n'
 import { useAuth } from '../composables/useAuth'
 
@@ -10,6 +11,56 @@ const { user, isLoggedIn } = useAuth();
 const types = ref<any[]>([]);
 const loading = ref(true);
 const loadError = ref(false);
+
+// 社区动态数据结构（公开，无需登录）
+interface FeedItem {
+    type: 'comment' | 'favorite'
+    id: number
+    user_id: number
+    username: string
+    avatar_url: string | null
+    created_at: string
+    book_id: number
+    book_title: string
+    book_cover_url: string | null
+    comment_id: number | null
+    content: string | null
+    parent_id: number | null
+}
+
+// 社区动态
+const feed = ref<FeedItem[]>([])
+const feedLoading = ref(true)
+
+// 相对时间（与 BookDetailPage 同款）
+function timeAgo(dateStr: string): string {
+    const now = Date.now()
+    const date = new Date(dateStr).getTime()
+    const diff = Math.floor((now - date) / 1000)
+    if (diff < 60) return '刚刚'
+    if (diff < 3600) return `${Math.floor(diff / 60)}分钟前`
+    if (diff < 86400) return `${Math.floor(diff / 3600)}小时前`
+    const days = Math.floor(diff / 86400)
+    if (days < 30) return `${days}天前`
+    return new Date(dateStr).toLocaleDateString('zh-CN')
+}
+
+// 动态动作文案
+function feedAction(item: FeedItem): string {
+    return item.type === 'favorite' ? '收藏了书籍' : '发表了书评'
+}
+
+async function loadFeed() {
+    feedLoading.value = true
+    try {
+        const res = await getCommunityFeed(20)
+        feed.value = res.data || []
+    } catch {
+        feed.value = []
+    } finally {
+        feedLoading.value = false
+    }
+}
 
 const reloadPage = () => window.location.reload()
 
@@ -70,6 +121,7 @@ onMounted(async () => {
         loading.value = false;
     }
     loadAnnouncements();
+    loadFeed();
 })
 
 function goToType(code: string) {
@@ -196,6 +248,49 @@ function getImage(code: string): string {
                         >
                     </div>
                     </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 书友动态：社区版（公开，无需登录） -->
+        <div class="mt-12 animate-fade-up">
+            <div class="flex items-baseline justify-between border-b-4 border-ink dark:border-paper pb-2 mb-6">
+                <h2 class="font-serif text-2xl font-bold tracking-tight text-ink dark:text-paper">书友动态</h2>
+                <span class="edition-label text-neutral-400">COMMUNITY</span>
+            </div>
+
+            <!-- 加载状态 -->
+            <div v-if="feedLoading" class="text-center py-12">
+                <div class="mx-auto max-w-md np-card px-8 py-8">
+                    <div class="edition-label text-editorial mb-3">排印中 · SETTING TYPE</div>
+                    <p class="font-serif text-xl font-bold text-ink dark:text-paper">加载中...<span class="animate-caret text-editorial">|</span></p>
+                </div>
+            </div>
+
+            <!-- 空状态 -->
+            <div v-else-if="feed.length === 0" class="text-center py-12">
+                <div class="mx-auto max-w-md np-card px-8 py-10">
+                    <div class="edition-label text-editorial mb-3">本期无内容 · NO CONTENT</div>
+                    <p class="font-serif text-xl font-bold text-ink dark:text-paper">还没有动态，来留下第一条书评吧</p>
+                </div>
+            </div>
+
+            <!-- 动态列表：报纸栏目条目 -->
+            <div v-else class="border border-ink dark:border-paper divide-y divide-ink/20">
+                <div v-for="item in feed" :key="`${item.type}-${item.id}`" class="p-4 flex gap-3 transition-colors duration-200 hover:bg-divider/30">
+                    <router-link :to="`/users/${item.user_id}`" class="w-9 h-9 shrink-0 flex items-center justify-center text-sm font-bold text-white border border-ink dark:border-paper overflow-hidden bg-neutral-100 dark:bg-neutral-800">
+                        <img v-if="item.avatar_url" :src="resolveAssetUrl(item.avatar_url)" :alt="item.username" class="w-full h-full object-cover" />
+                        <div v-else class="w-full h-full flex items-center justify-center bg-ink text-paper dark:bg-paper dark:text-ink">{{ (item.username || '?')[0].toUpperCase() }}</div>
+                    </router-link>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm leading-relaxed">
+                            <router-link :to="`/users/${item.user_id}`" class="font-semibold text-ink dark:text-paper hover:text-editorial transition-colors">{{ item.username }}</router-link>
+                            <span class="text-neutral-500 dark:text-neutral-400"> {{ feedAction(item) }} </span>
+                            <router-link :to="`/books/${item.book_id}`" class="np-btn-link">《{{ item.book_title }}》</router-link>
+                        </p>
+                        <p v-if="item.type === 'comment' && item.content" class="mt-1 text-sm text-neutral-600 dark:text-neutral-300 line-clamp-2 font-body">{{ item.content }}</p>
+                        <p class="edition-label text-neutral-400 dark:text-neutral-500 mt-1">{{ timeAgo(item.created_at) }}</p>
+                    </div>
                 </div>
             </div>
         </div>

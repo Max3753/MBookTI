@@ -1,10 +1,41 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getBookDetail, getBookComments, createComment, toggleCommentLike, toggleFavorite } from '../api'
+import {
+    getBookDetail,
+    getBookComments,
+    createComment,
+    toggleCommentLike,
+    toggleFavorite,
+    rateBook,
+    unrateBook,
+} from '../api'
 import apiConfig, { resolveAssetUrl } from '../api/config'
 import { t } from '../composables/useI18n'
 import { useAuth } from '../composables/useAuth'
+
+// 评论数据结构（含回复：parent_id 非空）
+interface BookComment {
+    id: number
+    user_id: number
+    username: string
+    avatar_url: string | null
+    book_id: number
+    book_title: string
+    book_cover_url: string | null
+    parent_id: number | null
+    content: string
+    likes_count: number
+    liked?: boolean
+    created_at: string
+}
+
+// 扁平列表渲染用节点：标记是否为回复及其父评论（用于缩进与"回复 @xxx"标识）
+interface CommentNode {
+    comment: BookComment
+    isReply: boolean
+    parent: BookComment | null
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -35,12 +66,21 @@ async function toggleFav() {
 }
 
 // 评论
-const comments = ref<any[]>([])
+const comments = ref<BookComment[]>([])
 const commentLoading = ref(false)
 const commentText = ref('')
 const submitting = ref(false)
 const likingId = ref<number | null>(null)
 const { isLoggedIn } = useAuth()
+
+// 回复：replyToId 为正在展开回复框的评论 id
+const replyToId = ref<number | null>(null)
+const replyText = ref('')
+const replySubmitting = ref(false)
+
+// 评分
+const ratingSubmitting = ref(false)
+const hoverRating = ref(0)
 
 // 豆瓣图床防盗链：走后端代理
 function proxyUrl(url: string): string {
@@ -69,6 +109,54 @@ function timeAgo(dateStr: string): string {
     if (days < 30) return `${days}天前`
     return new Date(dateStr).toLocaleDateString('zh-CN')
 }
+
+// 评分展示：平均分保留 1 位小数
+const avgRatingText = computed(() => {
+    const avg = book.value?.avg_rating
+    if (avg === null || avg === undefined) return ''
+    return Number(avg).toFixed(1)
+})
+
+// 星星高亮：悬停预览优先，否则用我的评分
+const displayRating = computed(() => hoverRating.value || book.value?.my_rating || 0)
+
+function findCommentById(id: number): BookComment | null {
+    return comments.value.find((c) => c.id === id) || null
+}
+
+// 组装树形渲染节点：顶层评论 + 其下回复；父级缺失的回复兜底展示
+const commentNodes = computed<CommentNode[]>(() => {
+    const nodes: CommentNode[] = []
+    const seen = new Set<number>()
+    for (const c of comments.value) {
+        if (!c.parent_id) {
+            nodes.push({ comment: c, isReply: false, parent: null })
+            seen.add(c.id)
+            for (const r of comments.value) {
+                if (r.parent_id === c.id) {
+                    nodes.push({ comment: r, isReply: true, parent: c })
+                    seen.add(r.id)
+                }
+            }
+        }
+    }
+    // 兜底：父评论被删除等导致未匹配的回复，作为回复展示
+    for (const c of comments.value) {
+        if (!seen.has(c.id)) {
+            nodes.push({
+                comment: c,
+                isReply: true,
+                parent: c.parent_id !== null ? findCommentById(c.parent_id) : null,
+            })
+        }
+    }
+    return nodes
+})
+
+const replyPlaceholder = computed(() => {
+    const parent = replyToId.value !== null ? findCommentById(replyToId.value) : null
+    return parent ? `回复 @${parent.username}` : '回复...'
+})
 
 onMounted(async () => {
     try {
@@ -101,7 +189,7 @@ async function submitComment() {
     }
 }
 
-async function toggleLike(comment: any) {
+async function toggleLike(comment: BookComment) {
     if (!isLoggedIn.value || likingId.value) return
     likingId.value = comment.id
     try {
@@ -114,6 +202,80 @@ async function toggleLike(comment: any) {
     } finally {
         likingId.value = null
     }
+}
+
+// 回复：点击展开/收起评论下方的回复框（未登录跳转登录页）
+function openReply(comment: BookComment) {
+    if (!isLoggedIn.value) {
+        router.push('/login')
+        return
+    }
+    replyToId.value = replyToId.value === comment.id ? null : comment.id
+    replyText.value = ''
+}
+
+async function submitReply() {
+    const parentId = replyToId.value
+    if (!parentId || !replyText.value.trim()) return
+    replySubmitting.value = true
+    try {
+        const res = await createComment({
+            book_id: bookId,
+            content: replyText.value.trim(),
+            parent_id: parentId,
+        })
+        // 追加进扁平数组，渲染时自动嵌套到父评论下方
+        comments.value.push(res.data)
+        replyToId.value = null
+        replyText.value = ''
+    } catch {
+        // silently fail
+    } finally {
+        replySubmitting.value = false
+    }
+}
+
+// 评分：点击星星打分；点击已选中的星星清除评分
+async function submitRating(rating: number) {
+    if (!isLoggedIn.value) {
+        router.push('/login')
+        return
+    }
+    if (ratingSubmitting.value) return
+    if (book.value?.my_rating === rating) {
+        await removeRating()
+        return
+    }
+    ratingSubmitting.value = true
+    try {
+        await rateBook(bookId, rating)
+        // 重拉详情，保证 avg_rating / rating_count / my_rating 与后端一致
+        await reloadBook()
+    } catch {
+        // silently fail
+    } finally {
+        ratingSubmitting.value = false
+    }
+}
+
+async function removeRating() {
+    if (!isLoggedIn.value) return
+    if (ratingSubmitting.value) return
+    ratingSubmitting.value = true
+    try {
+        await unrateBook(bookId)
+        // 删除评分返回 rating:null，统一重拉详情更新评分统计
+        await reloadBook()
+    } catch {
+        // silently fail
+    } finally {
+        ratingSubmitting.value = false
+    }
+}
+
+async function reloadBook() {
+    const res = await getBookDetail(bookId)
+    book.value = res.data
 }
 </script>
 
@@ -200,6 +362,31 @@ async function toggleLike(comment: any) {
                     <span v-if="book.genre" class="mt-3 inline-block np-badge np-badge-outline">
                         {{ book.genre }}
                     </span>
+                    <!-- 评分：读者评分栏（1-5 星，登录后可评分） -->
+                    <div class="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2">
+                        <div class="flex items-center gap-1" :title="isLoggedIn ? '点击评分（1-5 星）' : '登录后可评分'">
+                            <button
+                                v-for="star in 5"
+                                :key="star"
+                                @click="submitRating(star)"
+                                @mouseenter="hoverRating = star"
+                                @mouseleave="hoverRating = 0"
+                                :disabled="ratingSubmitting"
+                                class="text-2xl leading-none transition-transform duration-150 hover:scale-125 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                                :class="star <= displayRating ? 'text-editorial' : 'text-neutral-300 dark:text-neutral-600'"
+                            >★</button>
+                        </div>
+                        <span class="edition-label text-neutral-500 dark:text-neutral-400">
+                            <template v-if="book.avg_rating != null && book.rating_count">★ {{ avgRatingText }} · {{ book.rating_count }} 人评分</template>
+                            <template v-else>暂无评分</template>
+                        </span>
+                        <button
+                            v-if="book.my_rating"
+                            @click="removeRating"
+                            :disabled="ratingSubmitting"
+                            class="np-btn-link text-xs cursor-pointer disabled:opacity-50"
+                        >清除评分</button>
+                    </div>
                     <!-- 被推荐类型 -->
                     <div v-if="book.recommended_types?.length" class="mt-5">
                         <p class="edition-label text-neutral-500 mb-2">被推荐给以下 MBTI 类型</p>
@@ -258,37 +445,87 @@ async function toggleLike(comment: any) {
                 </div>
             </div>
 
-            <!-- 评论列表：读者来信 -->
-            <div v-if="comments.length > 0" class="space-y-4">
+            <!-- 评论列表：读者来信（顶层 + 缩进回复树） -->
+            <div v-if="comments.length > 0" class="border border-ink/10">
                 <div
-                    v-for="comment in comments"
-                    :key="comment.id"
-                    class="border border-ink/10 bg-paper p-4 transition-colors duration-200 hover:bg-divider/30"
+                    v-for="node in commentNodes"
+                    :key="node.comment.id"
+                    class="bg-paper border-b border-ink/10 last:border-b-0"
+                    :class="node.isReply
+                        ? 'ml-6 sm:ml-10 border-l-2 border-ink/15 pl-3 sm:pl-4'
+                        : ''"
                 >
-                    <div class="flex items-start justify-between mb-2">
-                        <div class="flex items-center gap-2 min-w-0">
-                            <div class="w-7 h-7 bg-ink text-paper dark:bg-paper dark:text-ink flex items-center justify-center font-mono text-xs font-bold shrink-0 overflow-hidden">
-                                <img v-if="comment.avatar_url" :src="resolveAssetUrl(comment.avatar_url)" :alt="comment.username" class="w-full h-full object-cover" />
-                                <template v-else>{{ (comment.username || '?').charAt(0).toUpperCase() }}</template>
+                    <div class="p-4 transition-colors duration-200 hover:bg-divider/30">
+                        <div class="flex items-start justify-between mb-2 gap-2">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <!-- 头像 + 用户名：点击进入用户主页 -->
+                                <router-link
+                                    :to="`/users/${node.comment.user_id}`"
+                                    class="w-7 h-7 bg-ink text-paper dark:bg-paper dark:text-ink flex items-center justify-center font-mono text-xs font-bold shrink-0 overflow-hidden"
+                                >
+                                    <img v-if="node.comment.avatar_url" :src="resolveAssetUrl(node.comment.avatar_url)" :alt="node.comment.username" class="w-full h-full object-cover" />
+                                    <template v-else>{{ (node.comment.username || '?').charAt(0).toUpperCase() }}</template>
+                                </router-link>
+                                <router-link
+                                    :to="`/users/${node.comment.user_id}`"
+                                    class="text-sm font-semibold text-ink dark:text-paper hover:text-editorial transition-colors truncate"
+                                >{{ node.comment.username }}</router-link>
+                                <span v-if="node.isReply && node.parent" class="np-badge np-badge-outline leading-none shrink-0">
+                                    回复 @{{ node.parent.username }}
+                                </span>
+                                <span class="edition-label text-neutral-400 shrink-0">{{ timeAgo(node.comment.created_at) }}</span>
                             </div>
-                            <span class="text-sm font-semibold text-ink dark:text-paper truncate">{{ comment.username }}</span>
-                            <span class="edition-label text-neutral-400 shrink-0">{{ timeAgo(comment.created_at) }}</span>
+                            <div class="flex items-center gap-2 shrink-0 ml-2">
+                                <button
+                                    @click="openReply(node.comment)"
+                                    :disabled="!isLoggedIn"
+                                    class="flex items-center gap-1 px-2.5 py-1 text-xs font-medium transition-colors duration-200 cursor-pointer shrink-0 disabled:opacity-50 disabled:cursor-not-allowed border"
+                                    :class="replyToId === node.comment.id
+                                        ? 'border-editorial bg-paper text-editorial'
+                                        : 'border-ink bg-transparent text-ink hover:bg-ink hover:text-paper dark:text-paper dark:border-paper dark:hover:bg-paper dark:hover:text-ink'"
+                                >
+                                    回复
+                                </button>
+                                <button
+                                    @click="toggleLike(node.comment)"
+                                    :disabled="!isLoggedIn || likingId === node.comment.id"
+                                    class="flex items-center gap-1 px-2.5 py-1 text-xs font-medium transition-colors duration-200 cursor-pointer shrink-0 disabled:opacity-50 disabled:cursor-not-allowed border"
+                                    :class="node.comment.liked
+                                        ? 'border-editorial bg-paper text-editorial'
+                                        : 'border-ink bg-transparent text-ink hover:bg-ink hover:text-paper dark:text-paper dark:border-paper dark:hover:bg-paper dark:hover:text-ink'"
+                                >
+                                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z"/>
+                                    </svg>
+                                    <span>{{ node.comment.likes_count || '' }}</span>
+                                </button>
+                            </div>
                         </div>
-                        <button
-                            @click="toggleLike(comment)"
-                            :disabled="!isLoggedIn || likingId === comment.id"
-                            class="flex items-center gap-1 px-2.5 py-1 text-xs font-medium transition-colors duration-200 cursor-pointer shrink-0 ml-2 disabled:opacity-50 disabled:cursor-not-allowed border"
-                            :class="comment.liked
-                                ? 'border-editorial bg-paper text-editorial'
-                                : 'border-ink bg-transparent text-ink hover:bg-ink hover:text-paper'"
-                        >
-                            <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z"/>
-                            </svg>
-                            <span>{{ comment.likes_count || '' }}</span>
-                        </button>
+                        <p class="text-sm font-serif text-neutral-600 dark:text-neutral-300 leading-relaxed whitespace-pre-wrap text-justify">{{ node.comment.content }}</p>
+
+                        <!-- 回复框：点击"回复"后展开在对应评论下方 -->
+                        <div v-if="replyToId === node.comment.id" class="mt-3 border border-ink/10 bg-divider/40 p-3">
+                            <textarea
+                                v-model="replyText"
+                                :placeholder="replyPlaceholder"
+                                class="np-input resize-none"
+                                rows="2"
+                            ></textarea>
+                            <div class="flex justify-end gap-2 mt-2">
+                                <button
+                                    @click="replyToId = null; replyText = ''"
+                                    class="np-btn np-btn-ghost px-3 text-xs cursor-pointer"
+                                >取消</button>
+                                <button
+                                    @click="submitReply"
+                                    :disabled="replySubmitting || !replyText.trim()"
+                                    class="np-btn np-btn-primary px-3 text-xs cursor-pointer"
+                                >
+                                    {{ replySubmitting ? '提交中...' : '发表' }}
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <p class="text-sm font-serif text-neutral-600 dark:text-neutral-300 leading-relaxed whitespace-pre-wrap text-justify">{{ comment.content }}</p>
                 </div>
             </div>
 

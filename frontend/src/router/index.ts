@@ -40,6 +40,11 @@ const router = createRouter({
             component: () => import ('../views/ResetPasswordPage.vue'),
         },
         {
+            path: "/users/:id",
+            name: "user-profile",
+            component: () => import ('../views/UserProfilePage.vue'),
+        },
+        {
             path: "/profile",
             name: "profile",
             meta: { requiresAuth: true },

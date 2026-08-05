@@ -37,6 +37,7 @@ const favoritesLoading = ref(false)
 const editing = ref(false)
 const editUsername = ref('')
 const editMbtiId = ref<number | null>(null)
+const editProfilePublic = ref(true)  // 公开主页开关（他人能否查看我的主页/书评/收藏）
 const mbtiTypes = ref<any[]>([])
 const saving = ref(false)
 const saveMsg = ref('')
@@ -213,6 +214,7 @@ async function openEdit() {
     } catch { /* ignore */ }
     editUsername.value = profile.value?.username || ''
     editMbtiId.value = profile.value?.mbti_type_id ?? null
+    editProfilePublic.value = profile.value?.is_profile_public ?? true
     saveMsg.value = ''
     editing.value = true
 }
@@ -229,6 +231,7 @@ async function saveProfile() {
         const res = await updateMyProfile({
             username: editUsername.value.trim(),
             mbti_type_id: editMbtiId.value,
+            is_profile_public: editProfilePublic.value,
         })
         profile.value = res.data
         // 同步共享用户状态（内存 ref + localStorage），导航栏/首页/类型页即时响应。
@@ -349,6 +352,7 @@ onMounted(async () => {
                     </div>
                     <!-- 操作按钮：移动端换行到下一行 -->
                     <div class="flex gap-2 shrink-0 sm:ml-auto">
+                        <router-link :to="`/users/${profile.id}`" class="np-btn np-btn-ghost px-4">公开主页</router-link>
                         <button @click="openEdit" class="np-btn np-btn-secondary px-4 cursor-pointer">编辑资料</button>
                         <button @click="openPw" class="np-btn np-btn-primary px-4 cursor-pointer">改密码</button>
                     </div>
@@ -363,19 +367,27 @@ onMounted(async () => {
                     <router-link to="/reader" class="np-btn np-btn-ghost px-4 shrink-0">打开阅读器</router-link>
                 </div>
 
-                <!-- 统计徽章：报纸数据栏 -->
-                <div class="grid grid-cols-3 border border-ink dark:border-paper mt-6">
+                <!-- 统计徽章：报纸数据栏（5 列，与公开主页口径一致） -->
+                <div class="grid grid-cols-5 border border-ink dark:border-paper mt-6">
                     <div class="py-4 text-center border-r border-ink dark:border-paper">
-                        <div class="font-mono text-3xl font-medium leading-none">{{ profile.stats.comment_count }}</div>
+                        <div class="font-mono text-2xl sm:text-3xl font-medium leading-none">{{ profile.stats.comment_count }}</div>
                         <div class="edition-label text-neutral-500 dark:text-neutral-400 mt-2">书评</div>
                     </div>
                     <div class="py-4 text-center border-r border-ink dark:border-paper">
-                        <div class="font-mono text-3xl font-medium leading-none">{{ profile.stats.favorite_count }}</div>
+                        <div class="font-mono text-2xl sm:text-3xl font-medium leading-none">{{ profile.stats.favorite_count }}</div>
                         <div class="edition-label text-neutral-500 dark:text-neutral-400 mt-2">收藏</div>
                     </div>
-                    <div class="py-4 text-center">
-                        <div class="font-mono text-3xl font-medium leading-none">{{ profile.stats.like_received }}</div>
+                    <div class="py-4 text-center border-r border-ink dark:border-paper">
+                        <div class="font-mono text-2xl sm:text-3xl font-medium leading-none">{{ profile.stats.like_received }}</div>
                         <div class="edition-label text-neutral-500 dark:text-neutral-400 mt-2">获赞</div>
+                    </div>
+                    <div class="py-4 text-center border-r border-ink dark:border-paper">
+                        <div class="font-mono text-2xl sm:text-3xl font-medium leading-none">{{ profile.stats.follower_count ?? 0 }}</div>
+                        <div class="edition-label text-neutral-500 dark:text-neutral-400 mt-2">粉丝</div>
+                    </div>
+                    <div class="py-4 text-center">
+                        <div class="font-mono text-2xl sm:text-3xl font-medium leading-none">{{ profile.stats.following_count ?? 0 }}</div>
+                        <div class="edition-label text-neutral-500 dark:text-neutral-400 mt-2">关注</div>
                     </div>
                 </div>
 
@@ -419,6 +431,22 @@ onMounted(async () => {
                             <option :value="null">未设置</option>
                             <option v-for="mt in mbtiTypes" :key="mt.id" :value="mt.id">{{ mt.code }} {{ mt.name }}</option>
                         </select>
+
+                        <!-- 公开主页开关 -->
+                        <label class="flex items-center justify-between border border-ink/15 dark:border-paper/20 px-3 py-3 mb-5 cursor-pointer">
+                            <span>
+                                <span class="block text-sm font-semibold text-ink dark:text-paper">公开我的主页</span>
+                                <span class="block edition-label text-neutral-400 dark:text-neutral-500 mt-0.5">
+                                    {{ editProfilePublic ? '任何人可查看我的主页 / 书评 / 收藏' : '仅自己可见（他人访问显示不存在）' }}
+                                </span>
+                            </span>
+                            <span class="relative inline-flex items-center h-6 w-11 shrink-0 rounded-full transition-colors"
+                                :class="editProfilePublic ? 'bg-editorial' : 'bg-neutral-300 dark:bg-neutral-600'">
+                                <input type="checkbox" v-model="editProfilePublic" class="sr-only" />
+                                <span class="inline-block w-4 h-4 bg-paper rounded-full shadow transition-transform"
+                                    :class="editProfilePublic ? 'translate-x-6' : 'translate-x-1'"></span>
+                            </span>
+                        </label>
                         <p v-if="saveMsg" class="font-mono text-xs mb-3"
                             :class="saveMsg === '已保存' ? 'text-neutral-500 dark:text-neutral-400' : 'text-editorial'">
                             {{ saveMsg }}

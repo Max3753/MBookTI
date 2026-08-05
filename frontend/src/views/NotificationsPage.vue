@@ -24,7 +24,18 @@ function timeAgo(dateStr: string): string {
 }
 
 function typeText(type: number): string {
-    return type === 2 ? '管理员消息' : '评论获赞'
+    if (type === 2) return '管理员消息'
+    if (type === 3) return '评论被回复'
+    if (type === 4) return '被关注'
+    return '评论获赞'
+}
+
+// 通知类型对应的徽标字
+function typeMark(type: number): string {
+    if (type === 2) return '管'
+    if (type === 3) return '回'
+    if (type === 4) return '关'
+    return '赞'
 }
 
 async function load() {
@@ -50,7 +61,7 @@ async function openNotification(n: any) {
         } catch { /* 忽略 */ }
         markingId.value = null
     }
-    if (n.related_book_id) {
+    if (n.related_book_id && n.type !== 4) {
         router.push(`/books/${n.related_book_id}`)
     }
 }
@@ -88,7 +99,7 @@ onMounted(load)
             </div>
             <div v-else-if="notifications.length === 0" class="p-12 text-center">
                 <p class="font-serif text-3xl text-neutral-400">暂无通知</p>
-                <p class="edition-label text-neutral-400 dark:text-neutral-500 mt-4">书评获赞或收到管理员消息时会出现在这里</p>
+                <p class="edition-label text-neutral-400 dark:text-neutral-500 mt-4">书评获赞、被回复、被关注或收到管理员消息时会出现在这里</p>
             </div>
             <div v-else>
                 <button
@@ -100,7 +111,7 @@ onMounted(load)
                 >
                     <div class="w-8 h-8 border border-ink dark:border-paper flex items-center justify-center font-mono text-xs shrink-0"
                         :class="n.type === 2 ? 'text-editorial' : 'text-ink dark:text-paper'">
-                        {{ n.type === 2 ? '管' : '赞' }}
+                        {{ typeMark(n.type) }}
                     </div>
                     <div class="flex-1 min-w-0">
                         <div class="flex items-center gap-2">
