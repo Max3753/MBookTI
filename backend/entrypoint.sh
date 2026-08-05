@@ -31,6 +31,7 @@ EOF
 echo "==> 建表 (幂等，只创建缺失表) ..."
 python scripts/create_notification_tables.py
 python scripts/create_reading_record_tables.py
+python scripts/create_social_tables.py
 
 echo "==> 启动后端 ..."
 exec uvicorn app.main:app --host 0.0.0.0 --port 8000 

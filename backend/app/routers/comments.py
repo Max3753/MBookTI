@@ -33,6 +33,16 @@ async def create_comment(
         if parent.book_id != req.book_id:
             raise HTTPException(status_code=400, detail="父评论与当前书籍不匹配")
 
+    # 回复通知：非回复自己时，给被回复者发一条通知（每次回复都通知一次，无需去重）
+    if req.parent_id is not None and parent.user_id != current_user.id:
+        session.add(Notification(
+            user_id=parent.user_id,
+            type=3,  # 评论被回复
+            content=f"{current_user.username} 回复了你的书评",
+            related_book_id=req.book_id,
+            related_comment_id=parent.id,
+        ))
+
     comment = Comment(
         user_id=current_user.id,
         book_id=req.book_id,

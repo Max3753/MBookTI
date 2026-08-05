@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Book, Comment, MbtiType, User, UserBookFavorite
+from app.models import Book, Comment, MbtiType, User, UserBookFavorite, UserFollow, Notification
 from app.schemas import (
     AdminResetPasswordRequest,
     ApiListResponse,
@@ -15,12 +15,13 @@ from app.schemas import (
     BookResponse,
     ChangePasswordRequest,
     MyCommentResponse,
+    PublicUserProfileResponse,
     UserProfileResponse,
     UserStats,
     UserUpdateRequest,
     UserResponse,
 )
-from app.auth.deps import get_current_user, get_current_admin
+from app.auth.deps import get_current_user, get_current_admin, get_current_user_optional
 from app.auth.password import hash_password, verify_password
 
 router = APIRouter(
@@ -110,27 +111,6 @@ async def get_me(
     row = result.first()
     user, mbti = (row[0], row[1]) if row else (current_user, None)
 
-    # 统计
-    comment_count = (
-        await session.execute(
-            select(func.count(Comment.id)).where(Comment.user_id == current_user.id)
-        )
-    ).scalar()
-    like_received = (
-        await session.execute(
-            select(func.coalesce(func.sum(Comment.likes_count), 0)).where(
-                Comment.user_id == current_user.id
-            )
-        )
-    ).scalar()
-    favorite_count = (
-        await session.execute(
-            select(func.count(UserBookFavorite.id)).where(
-                UserBookFavorite.user_id == current_user.id
-            )
-        )
-    ).scalar()
-
     return ApiResponse(data=UserProfileResponse(
         id=user.id,
         username=user.username,
@@ -140,13 +120,11 @@ async def get_me(
         mbti_type_code=mbti.code if mbti else None,
         mbti_type_name=mbti.name if mbti else None,
         is_admin=user.is_admin,
+        is_profile_public=user.is_profile_public,
         created_at=user.created_at,
-        stats=UserStats(
-            comment_count=comment_count or 0,
-            favorite_count=favorite_count or 0,
-            like_received=like_received or 0,
-        ),
+        stats=await _get_user_stats(session, current_user.id),
     ))
+
 
 @router.put("/me", response_model=ApiResponse[UserProfileResponse])
 async def update_me(
@@ -188,25 +166,6 @@ async def update_me(
     )
     row = result.first()
     user, mbti = (row[0], row[1]) if row else (current_user, None)
-    comment_count = (
-        await session.execute(
-            select(func.count(Comment.id)).where(Comment.user_id == current_user.id)
-        )
-    ).scalar()
-    like_received = (
-        await session.execute(
-            select(func.coalesce(func.sum(Comment.likes_count), 0)).where(
-                Comment.user_id == current_user.id
-            )
-        )
-    ).scalar()
-    favorite_count = (
-        await session.execute(
-            select(func.count(UserBookFavorite.id)).where(
-                UserBookFavorite.user_id == current_user.id
-            )
-        )
-    ).scalar()
 
     return ApiResponse(data=UserProfileResponse(
         id=user.id,
@@ -217,12 +176,9 @@ async def update_me(
         mbti_type_code=mbti.code if mbti else None,
         mbti_type_name=mbti.name if mbti else None,
         is_admin=user.is_admin,
+        is_profile_public=user.is_profile_public,
         created_at=user.created_at,
-        stats=UserStats(
-            comment_count=comment_count or 0,
-            favorite_count=favorite_count or 0,
-            like_received=like_received or 0,
-        ),
+        stats=await _get_user_stats(session, current_user.id),
     ))
 
 
@@ -392,3 +348,351 @@ async def admin_reset_password(
     user.password_changed_at = datetime.now(timezone.utc)
     await session.commit()
     return ApiResponse(data=None, message=f"已重置用户 {user.username} 的密码")
+
+
+# ---------- 公开用户主页 / 关注系统 ----------
+# 注意路由顺序：/{user_id} 系列路由必须注册在所有 /me 系列路由之后，
+# 否则 FastAPI 会按注册顺序优先匹配到 /{user_id}，导致 GET /users/me 被 /{user_id} 吞掉。
+
+
+def _resolve_user_id(user_id: str) -> int:
+    """把路径参数解析为真实用户 id（"me" 或非整数 → 404，语义与 admin_reset_password 一致）。"""
+    if user_id == "me":
+        raise HTTPException(status_code=404, detail="用户不存在")
+    try:
+        return int(user_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="用户不存在")
+
+
+async def _get_user_stats(session: AsyncSession, user_id: int) -> UserStats:
+    """某用户的五项统计：书评数 / 收藏数 / 获赞数 / 粉丝数 / 关注数。
+
+    供 /users/me、PUT /users/me、公开主页三处共用，保证各入口口径一致。
+    """
+    comment_count = (
+        await session.execute(
+            select(func.count(Comment.id)).where(Comment.user_id == user_id)
+        )
+    ).scalar()
+    like_received = (
+        await session.execute(
+            select(func.coalesce(func.sum(Comment.likes_count), 0)).where(
+                Comment.user_id == user_id
+            )
+        )
+    ).scalar()
+    favorite_count = (
+        await session.execute(
+            select(func.count(UserBookFavorite.id)).where(
+                UserBookFavorite.user_id == user_id
+            )
+        )
+    ).scalar()
+    follower_count = (
+        await session.execute(
+            select(func.count(UserFollow.id)).where(UserFollow.following_id == user_id)
+        )
+    ).scalar()
+    following_count = (
+        await session.execute(
+            select(func.count(UserFollow.id)).where(UserFollow.follower_id == user_id)
+        )
+    ).scalar()
+    return UserStats(
+        comment_count=comment_count or 0,
+        favorite_count=favorite_count or 0,
+        like_received=like_received or 0,
+        follower_count=follower_count or 0,
+        following_count=following_count or 0,
+    )
+
+
+async def _get_public_profile_data(
+    session: AsyncSession,
+    user: User,
+    current_user: User | None,
+) -> PublicUserProfileResponse:
+    """组装公开用户主页数据（MBTI + 统计 + 关注关系）。"""
+    # join mbti_types 取 code/name（outerjoin：用户可能未设置 MBTI）
+    result = await session.execute(
+        select(User, MbtiType)
+        .outerjoin(MbtiType, User.mbti_type_id == MbtiType.id)
+        .where(User.id == user.id)
+    )
+    row = result.first()
+    mbti = row[1] if row else None
+
+    # 当前登录者是否关注了该用户（未登录或看自己 → False）
+    is_following = False
+    if current_user is not None and current_user.id != user.id:
+        rel = (
+            await session.execute(
+                select(UserFollow).where(
+                    UserFollow.follower_id == current_user.id,
+                    UserFollow.following_id == user.id,
+                )
+            )
+        ).scalar_one_or_none()
+        is_following = rel is not None
+
+    # 是否本人的主页
+    is_self = current_user is not None and current_user.id == user.id
+
+    return PublicUserProfileResponse(
+        id=user.id,
+        username=user.username,
+        avatar_url=user.avatar_url,
+        is_admin=user.is_admin,
+        is_profile_public=user.is_profile_public,
+        created_at=user.created_at,
+        mbti_type_code=mbti.code if mbti else None,
+        mbti_type_name=mbti.name if mbti else None,
+        stats=await _get_user_stats(session, user.id),
+        is_following=is_following,
+        is_self=is_self,
+    )
+
+
+def _ensure_profile_visible(target: User, current_user: User | None) -> None:
+    """隐私检查：目标用户关闭公开主页且访问者非本人时，按"用户不存在"处理（不泄露存在性）。
+
+    应用于公开主页、公开评论/收藏列表、粉丝/关注列表、关注操作。
+    """
+    if not target.is_profile_public and (current_user is None or current_user.id != target.id):
+        raise HTTPException(status_code=404, detail="用户不存在")
+
+
+@router.get("/{user_id}", response_model=ApiResponse[PublicUserProfileResponse])
+async def get_public_profile(
+    user_id: str,
+    session: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
+):
+    """公开用户主页（无需登录；登录时额外返回 is_following / is_self）。"""
+    uid = _resolve_user_id(user_id)
+    user = (
+        await session.execute(select(User).where(User.id == uid))
+    ).scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    _ensure_profile_visible(user, current_user)
+    return ApiResponse(data=await _get_public_profile_data(session, user, current_user))
+
+
+@router.get("/{user_id}/comments", response_model=ApiListResponse[MyCommentResponse])
+async def public_user_comments(
+    user_id: str,
+    page: int = 1,
+    page_size: int = 20,
+    session: AsyncSession = Depends(get_db),
+):
+    """公开某用户的评论列表（分页，最新在前；隐藏评论不对外展示）。"""
+    uid = _resolve_user_id(user_id)
+    if page < 1:
+        page = 1
+    if page_size < 1 or page_size > 50:
+        page_size = 20
+
+    # 先确认用户存在（404 语义与主页一致）
+    user = (
+        await session.execute(select(User).where(User.id == uid))
+    ).scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    _ensure_profile_visible(user, None)
+
+    result = await session.execute(
+        select(Comment, Book)
+        .join(Book, Comment.book_id == Book.id)
+        .where(Comment.user_id == uid, Comment.is_hidden == False)  # noqa: E712
+        .order_by(Comment.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    rows = result.all()
+
+    total = (
+        await session.execute(
+            select(func.count(Comment.id)).where(
+                Comment.user_id == uid, Comment.is_hidden == False  # noqa: E712
+            )
+        )
+    ).scalar()
+
+    items = [
+        MyCommentResponse(
+            id=c.id,
+            book_id=c.book_id,
+            book_title=b.title,
+            book_cover_url=b.cover_url,
+            parent_id=c.parent_id,
+            content=c.content,
+            likes_count=c.likes_count,
+            created_at=c.created_at,
+        )
+        for c, b in rows
+    ]
+    return ApiListResponse(data=items, total=total or 0)
+
+
+@router.get("/{user_id}/favorites", response_model=ApiListResponse[BookResponse])
+async def public_user_favorites(
+    user_id: str,
+    session: AsyncSession = Depends(get_db),
+):
+    """公开某用户的收藏书单（同 my_favorites 查询，按目标用户过滤）。"""
+    uid = _resolve_user_id(user_id)
+    user = (
+        await session.execute(select(User).where(User.id == uid))
+    ).scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    _ensure_profile_visible(user, None)
+
+    result = await session.execute(
+        select(Book)
+        .join(UserBookFavorite, UserBookFavorite.book_id == Book.id)
+        .where(UserBookFavorite.user_id == uid)
+        .order_by(UserBookFavorite.created_at.desc())
+    )
+    books = result.scalars().all()
+    return ApiListResponse(data=[BookResponse.model_validate(b) for b in books], total=len(books))
+
+
+@router.post("/{user_id}/follow", response_model=ApiResponse)
+async def toggle_follow(
+    user_id: str,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """关注/取消关注（切换）。关注成功时给被关注者发一条 type=4 通知（去重：同一关注关系仅一次）。"""
+    uid = _resolve_user_id(user_id)
+    if uid == current_user.id:
+        raise HTTPException(status_code=400, detail="不能关注自己")
+
+    target = (
+        await session.execute(select(User).where(User.id == uid))
+    ).scalar_one_or_none()
+    if target is None:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    _ensure_profile_visible(target, current_user)
+
+    rel = (
+        await session.execute(
+            select(UserFollow).where(
+                UserFollow.follower_id == current_user.id,
+                UserFollow.following_id == uid,
+            )
+        )
+    ).scalar_one_or_none()
+
+    if rel:
+        await session.delete(rel)
+        is_following = False
+    else:
+        session.add(UserFollow(follower_id=current_user.id, following_id=uid))
+        is_following = True
+        # 关注通知（去重）：同一关注关系只通知一次，取消后再关注不重复
+        dup = await session.execute(
+            select(Notification).where(
+                Notification.user_id == uid,
+                Notification.type == 4,
+                # 关注通知无书籍上下文，related_book_id 复用来标识"来源用户"（follower_id）
+                Notification.related_book_id == current_user.id,
+            )
+        )
+        if dup.scalar_one_or_none() is None:
+            session.add(Notification(
+                user_id=uid,
+                type=4,  # 被关注
+                content=f"{current_user.username} 关注了你",
+                related_book_id=current_user.id,
+            ))
+
+    await session.commit()
+    return ApiResponse(data={"is_following": is_following})
+
+
+@router.get("/{user_id}/followers", response_model=ApiListResponse[UserResponse])
+async def public_user_followers(
+    user_id: str,
+    page: int = 1,
+    page_size: int = 20,
+    session: AsyncSession = Depends(get_db),
+):
+    """某用户的粉丝列表（分页，最新关注在前）。"""
+    uid = _resolve_user_id(user_id)
+    if page < 1:
+        page = 1
+    if page_size < 1 or page_size > 50:
+        page_size = 20
+
+    user = (
+        await session.execute(select(User).where(User.id == uid))
+    ).scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    _ensure_profile_visible(user, None)
+
+    total = (
+        await session.execute(
+            select(func.count(UserFollow.id)).where(UserFollow.following_id == uid)
+        )
+    ).scalar()
+
+    result = await session.execute(
+        select(User)
+        .join(UserFollow, UserFollow.follower_id == User.id)
+        .where(UserFollow.following_id == uid)
+        .order_by(UserFollow.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    followers = result.scalars().all()
+    return ApiListResponse(
+        data=[UserResponse.model_validate(u) for u in followers],
+        total=total or 0,
+    )
+
+
+@router.get("/{user_id}/following", response_model=ApiListResponse[UserResponse])
+async def public_user_following(
+    user_id: str,
+    page: int = 1,
+    page_size: int = 20,
+    session: AsyncSession = Depends(get_db),
+):
+    """某用户关注的用户列表（分页，最新关注在前）。"""
+    uid = _resolve_user_id(user_id)
+    if page < 1:
+        page = 1
+    if page_size < 1 or page_size > 50:
+        page_size = 20
+
+    user = (
+        await session.execute(select(User).where(User.id == uid))
+    ).scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    _ensure_profile_visible(user, None)
+
+    total = (
+        await session.execute(
+            select(func.count(UserFollow.id)).where(UserFollow.follower_id == uid)
+        )
+    ).scalar()
+
+    result = await session.execute(
+        select(User)
+        .join(UserFollow, UserFollow.following_id == User.id)
+        .where(UserFollow.follower_id == uid)
+        .order_by(UserFollow.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    following = result.scalars().all()
+    return ApiListResponse(
+        data=[UserResponse.model_validate(u) for u in following],
+        total=total or 0,
+    )

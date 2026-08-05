@@ -1,4 +1,4 @@
-# 个人通知路由：评论获赞 / 管理员消息
+# 个人通知路由：评论获赞 / 管理员消息 / 评论被回复 / 被关注
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +21,8 @@ router = APIRouter(
 
 TYPE_LIKE = 1
 TYPE_ADMIN_MESSAGE = 2
+TYPE_REPLY = 3
+TYPE_FOLLOW = 4
 
 
 @router.get("", response_model=ApiListResponse[NotificationResponse])

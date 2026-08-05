@@ -1,6 +1,12 @@
 from app.schemas.common import ApiResponse, ApiListResponse, ErrorResponse
 from app.schemas.mbti_type import MbtiTypeResponse
-from app.schemas.book import BookResponse, BookDetailResponse, RecommendedTypeInfo
+from app.schemas.book import (
+    BookResponse,
+    BookDetailResponse,
+    RecommendedTypeInfo,
+    BookRatingRequest,
+    BookRatingResponse,
+)
 from app.schemas.recommendation import RecommendationResponse, AIGenerateRequest, AIGenerateBook
 from app.schemas.user import (
     UserResponse,
@@ -8,6 +14,7 @@ from app.schemas.user import (
     UserRegisterRequest,
     UserLoginRequest,
     UserProfileResponse,
+    PublicUserProfileResponse,
     UserStats,
     UserUpdateRequest,
     ChangePasswordRequest,
@@ -16,6 +23,7 @@ from app.schemas.user import (
     AdminResetPasswordRequest,
 )
 from app.schemas.comment import CommentResponse, CommentCreateRequest, MyCommentResponse
+from app.schemas.community import FeedItem
 from app.schemas.announcement import AnnouncementResponse, AnnouncementCreateRequest
 from app.schemas.notification import NotificationResponse, NotificationCreateRequest, UnreadCountResponse
 from app.schemas.reading_record import (
@@ -31,6 +39,8 @@ __all__ = [
     "BookResponse",
     "BookDetailResponse",
     "RecommendedTypeInfo",
+    "BookRatingRequest",
+    "BookRatingResponse",
     "RecommendationResponse",
     "AIGenerateRequest",
     "AIGenerateBook",
@@ -39,6 +49,7 @@ __all__ = [
     "UserRegisterRequest",
     "UserLoginRequest",
     "UserProfileResponse",
+    "PublicUserProfileResponse",
     "UserStats",
     "UserUpdateRequest",
     "ChangePasswordRequest",
@@ -48,6 +59,7 @@ __all__ = [
     "CommentResponse",
     "CommentCreateRequest",
     "MyCommentResponse",
+    "FeedItem",
     "AnnouncementResponse",
     "AnnouncementCreateRequest",
     "NotificationResponse",

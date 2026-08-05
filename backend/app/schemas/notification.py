@@ -10,7 +10,7 @@ class NotificationCreateRequest(BaseModel):
 
 class NotificationResponse(BaseModel):
     id: int
-    type: int          # 1=评论获赞 2=管理员消息
+    type: int          # 1=评论获赞 2=管理员消息 3=评论被回复 4=被关注
     content: str
     related_book_id: Optional[int] = None
     related_comment_id: Optional[int] = None

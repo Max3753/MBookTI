@@ -1,4 +1,4 @@
-# 个人通知模型（评论获赞 / 管理员消息）
+# 个人通知模型（评论获赞 / 管理员消息 / 评论被回复 / 被关注）
 from sqlalchemy import Boolean, ForeignKey, Integer, SmallInteger, String, DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column
 from datetime import datetime
@@ -9,7 +9,7 @@ class Notification(Base):
     """个人通知收件箱。
 
     type: 1=评论获赞(like)  2=管理员消息(admin_message)
-    3=评论被回复(reply)（预留，暂未触发）
+    3=评论被回复(reply)  4=被关注(follow)
     """
 
     __tablename__ = "notifications"
