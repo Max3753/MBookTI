@@ -30,11 +30,10 @@ interface BookComment {
     created_at: string
 }
 
-// 扁平列表渲染用节点：标记是否为回复及其父评论（用于缩进与"回复 @xxx"标识）
-interface CommentNode {
-    comment: BookComment
-    isReply: boolean
-    parent: BookComment | null
+// 评论分组：一条顶层评论 + 其下全部回复（用于折叠展示）
+interface CommentGroup {
+    top: BookComment
+    replies: BookComment[]
 }
 
 const route = useRoute()
@@ -124,34 +123,41 @@ function findCommentById(id: number): BookComment | null {
     return comments.value.find((c) => c.id === id) || null
 }
 
-// 组装树形渲染节点：顶层评论 + 其下回复；父级缺失的回复兜底展示
-const commentNodes = computed<CommentNode[]>(() => {
-    const nodes: CommentNode[] = []
-    const seen = new Set<number>()
+// 组装评论分组：顶层评论 + 其下回复；父评论缺失的孤儿回复兜底为独立顶层
+const commentGroups = computed<CommentGroup[]>(() => {
+    const groups: CommentGroup[] = []
+    const used = new Set<number>()
     for (const c of comments.value) {
         if (!c.parent_id) {
-            nodes.push({ comment: c, isReply: false, parent: null })
-            seen.add(c.id)
-            for (const r of comments.value) {
-                if (r.parent_id === c.id) {
-                    nodes.push({ comment: r, isReply: true, parent: c })
-                    seen.add(r.id)
-                }
-            }
+            const replies = comments.value.filter((r) => r.parent_id === c.id)
+            used.add(c.id)
+            replies.forEach((r) => used.add(r.id))
+            groups.push({ top: c, replies })
         }
     }
-    // 兜底：父评论被删除等导致未匹配的回复，作为回复展示
+    // 兜底：父评论被删除等导致未匹配的回复，作为独立评论展示
     for (const c of comments.value) {
-        if (!seen.has(c.id)) {
-            nodes.push({
-                comment: c,
-                isReply: true,
-                parent: c.parent_id !== null ? findCommentById(c.parent_id) : null,
-            })
+        if (!used.has(c.id)) {
+            groups.push({ top: c, replies: [] })
         }
     }
-    return nodes
+    return groups
 })
+
+// 回复折叠：默认全部折叠；展开的顶层评论 id 记录在集合中
+const expandedReplyIds = ref<Set<number>>(new Set())
+const isRepliesExpanded = (topId: number) => expandedReplyIds.value.has(topId)
+function toggleReplies(topId: number) {
+    const next = new Set(expandedReplyIds.value)
+    if (next.has(topId)) next.delete(topId)
+    else next.add(topId)
+    expandedReplyIds.value = next
+}
+function expandReplies(topId: number) {
+    if (!expandedReplyIds.value.has(topId)) {
+        expandedReplyIds.value = new Set(expandedReplyIds.value).add(topId)
+    }
+}
 
 const replyPlaceholder = computed(() => {
     const parent = replyToId.value !== null ? findCommentById(replyToId.value) : null
@@ -226,6 +232,8 @@ async function submitReply() {
         })
         // 追加进扁平数组，渲染时自动嵌套到父评论下方
         comments.value.push(res.data)
+        // 自动展开父评论的回复区，让刚发表的回复立即可见
+        expandReplies(parentId)
         replyToId.value = null
         replyText.value = ''
     } catch {
@@ -445,66 +453,61 @@ async function reloadBook() {
                 </div>
             </div>
 
-            <!-- 评论列表：读者来信（顶层 + 缩进回复树） -->
+            <!-- 评论列表：读者来信（顶层评论 + 可折叠回复，默认折叠） -->
             <div v-if="comments.length > 0" class="border border-ink/10">
                 <div
-                    v-for="node in commentNodes"
-                    :key="node.comment.id"
+                    v-for="group in commentGroups"
+                    :key="group.top.id"
                     class="bg-paper border-b border-ink/10 last:border-b-0"
-                    :class="node.isReply
-                        ? 'ml-6 sm:ml-10 border-l-2 border-ink/15 pl-3 sm:pl-4'
-                        : ''"
                 >
+                    <!-- 顶层评论 -->
                     <div class="p-4 transition-colors duration-200 hover:bg-divider/30">
                         <div class="flex items-start justify-between mb-2 gap-2">
                             <div class="flex items-center gap-2 min-w-0">
                                 <!-- 头像 + 用户名：点击进入用户主页 -->
                                 <router-link
-                                    :to="`/users/${node.comment.user_id}`"
+                                    :to="`/users/${group.top.user_id}`"
                                     class="w-7 h-7 bg-ink text-paper dark:bg-paper dark:text-ink flex items-center justify-center font-mono text-xs font-bold shrink-0 overflow-hidden"
                                 >
-                                    <img v-if="node.comment.avatar_url" :src="resolveAssetUrl(node.comment.avatar_url)" :alt="node.comment.username" class="w-full h-full object-cover" />
-                                    <template v-else>{{ (node.comment.username || '?').charAt(0).toUpperCase() }}</template>
+                                    <img v-if="group.top.avatar_url" :src="resolveAssetUrl(group.top.avatar_url)" :alt="group.top.username" class="w-full h-full object-cover" />
+                                    <template v-else>{{ (group.top.username || '?').charAt(0).toUpperCase() }}</template>
                                 </router-link>
                                 <router-link
-                                    :to="`/users/${node.comment.user_id}`"
+                                    :to="`/users/${group.top.user_id}`"
                                     class="text-sm font-semibold text-ink dark:text-paper hover:text-editorial transition-colors truncate"
-                                >{{ node.comment.username }}</router-link>
-                                <span v-if="node.isReply && node.parent" class="np-badge np-badge-outline leading-none shrink-0">
-                                    回复 @{{ node.parent.username }}
-                                </span>
-                                <span class="edition-label text-neutral-400 shrink-0">{{ timeAgo(node.comment.created_at) }}</span>
+                                >{{ group.top.username }}</router-link>
+                                <span class="edition-label text-neutral-400 shrink-0">{{ timeAgo(group.top.created_at) }}</span>
                             </div>
                             <div class="flex items-center gap-2 shrink-0 ml-2">
                                 <button
-                                    @click="openReply(node.comment)"
+                                    @click="openReply(group.top)"
                                     :disabled="!isLoggedIn"
                                     class="flex items-center gap-1 px-2.5 py-1 text-xs font-medium transition-colors duration-200 cursor-pointer shrink-0 disabled:opacity-50 disabled:cursor-not-allowed border"
-                                    :class="replyToId === node.comment.id
+                                    :class="replyToId === group.top.id
                                         ? 'border-editorial bg-paper text-editorial'
                                         : 'border-ink bg-transparent text-ink hover:bg-ink hover:text-paper dark:text-paper dark:border-paper dark:hover:bg-paper dark:hover:text-ink'"
                                 >
                                     回复
                                 </button>
                                 <button
-                                    @click="toggleLike(node.comment)"
-                                    :disabled="!isLoggedIn || likingId === node.comment.id"
+                                    @click="toggleLike(group.top)"
+                                    :disabled="!isLoggedIn || likingId === group.top.id"
                                     class="flex items-center gap-1 px-2.5 py-1 text-xs font-medium transition-colors duration-200 cursor-pointer shrink-0 disabled:opacity-50 disabled:cursor-not-allowed border"
-                                    :class="node.comment.liked
+                                    :class="group.top.liked
                                         ? 'border-editorial bg-paper text-editorial'
                                         : 'border-ink bg-transparent text-ink hover:bg-ink hover:text-paper dark:text-paper dark:border-paper dark:hover:bg-paper dark:hover:text-ink'"
                                 >
                                     <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
                                         <path d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z"/>
                                     </svg>
-                                    <span>{{ node.comment.likes_count || '' }}</span>
+                                    <span>{{ group.top.likes_count || '' }}</span>
                                 </button>
                             </div>
                         </div>
-                        <p class="text-sm font-serif text-neutral-600 dark:text-neutral-300 leading-relaxed whitespace-pre-wrap text-justify">{{ node.comment.content }}</p>
+                        <p class="text-sm font-serif text-neutral-600 dark:text-neutral-300 leading-relaxed whitespace-pre-wrap text-justify">{{ group.top.content }}</p>
 
                         <!-- 回复框：点击"回复"后展开在对应评论下方 -->
-                        <div v-if="replyToId === node.comment.id" class="mt-3 border border-ink/10 bg-divider/40 p-3">
+                        <div v-if="replyToId === group.top.id" class="mt-3 border border-ink/10 bg-divider/40 p-3">
                             <textarea
                                 v-model="replyText"
                                 :placeholder="replyPlaceholder"
@@ -523,6 +526,104 @@ async function reloadBook() {
                                 >
                                     {{ replySubmitting ? '提交中...' : '发表' }}
                                 </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 回复折叠条：有回复时显示，默认折叠 -->
+                    <div v-if="group.replies.length" class="border-t border-ink/10">
+                        <button
+                            @click="toggleReplies(group.top.id)"
+                            class="w-full flex items-center gap-1.5 px-4 py-2 text-xs font-sans uppercase tracking-wider text-editorial hover:bg-divider/40 transition-colors cursor-pointer"
+                        >
+                            <svg class="w-3.5 h-3.5 transition-transform duration-200"
+                                :class="isRepliesExpanded(group.top.id) ? 'rotate-180' : ''"
+                                fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
+                            </svg>
+                            {{ isRepliesExpanded(group.top.id)
+                                ? '收起回复'
+                                : `查看 ${group.replies.length} 条回复` }}
+                        </button>
+                    </div>
+
+                    <!-- 回复列表：展开时显示（缩进 + 左边线） -->
+                    <div
+                        v-if="isRepliesExpanded(group.top.id) && group.replies.length"
+                        class="ml-6 sm:ml-10 border-l-2 border-ink/15"
+                    >
+                        <div
+                            v-for="r in group.replies"
+                            :key="r.id"
+                            class="p-4 border-b border-ink/10 last:border-b-0 transition-colors duration-200 hover:bg-divider/30"
+                        >
+                            <div class="flex items-start justify-between mb-2 gap-2">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <router-link
+                                        :to="`/users/${r.user_id}`"
+                                        class="w-7 h-7 bg-ink text-paper dark:bg-paper dark:text-ink flex items-center justify-center font-mono text-xs font-bold shrink-0 overflow-hidden"
+                                    >
+                                        <img v-if="r.avatar_url" :src="resolveAssetUrl(r.avatar_url)" :alt="r.username" class="w-full h-full object-cover" />
+                                        <template v-else>{{ (r.username || '?').charAt(0).toUpperCase() }}</template>
+                                    </router-link>
+                                    <router-link
+                                        :to="`/users/${r.user_id}`"
+                                        class="text-sm font-semibold text-ink dark:text-paper hover:text-editorial transition-colors truncate"
+                                    >{{ r.username }}</router-link>
+                                    <span class="np-badge np-badge-outline leading-none shrink-0">
+                                        回复 @{{ group.top.username }}
+                                    </span>
+                                    <span class="edition-label text-neutral-400 shrink-0">{{ timeAgo(r.created_at) }}</span>
+                                </div>
+                                <div class="flex items-center gap-2 shrink-0 ml-2">
+                                    <button
+                                        @click="openReply(r)"
+                                        :disabled="!isLoggedIn"
+                                        class="flex items-center gap-1 px-2.5 py-1 text-xs font-medium transition-colors duration-200 cursor-pointer shrink-0 disabled:opacity-50 disabled:cursor-not-allowed border"
+                                        :class="replyToId === r.id
+                                            ? 'border-editorial bg-paper text-editorial'
+                                            : 'border-ink bg-transparent text-ink hover:bg-ink hover:text-paper dark:text-paper dark:border-paper dark:hover:bg-paper dark:hover:text-ink'"
+                                    >
+                                        回复
+                                    </button>
+                                    <button
+                                        @click="toggleLike(r)"
+                                        :disabled="!isLoggedIn || likingId === r.id"
+                                        class="flex items-center gap-1 px-2.5 py-1 text-xs font-medium transition-colors duration-200 cursor-pointer shrink-0 disabled:opacity-50 disabled:cursor-not-allowed border"
+                                        :class="r.liked
+                                            ? 'border-editorial bg-paper text-editorial'
+                                            : 'border-ink bg-transparent text-ink hover:bg-ink hover:text-paper dark:text-paper dark:border-paper dark:hover:bg-paper dark:hover:text-ink'"
+                                    >
+                                        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                                            <path d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z"/>
+                                        </svg>
+                                        <span>{{ r.likes_count || '' }}</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <p class="text-sm font-serif text-neutral-600 dark:text-neutral-300 leading-relaxed whitespace-pre-wrap text-justify">{{ r.content }}</p>
+
+                            <!-- 回复框：点击"回复"后展开在对应回复下方 -->
+                            <div v-if="replyToId === r.id" class="mt-3 border border-ink/10 bg-divider/40 p-3">
+                                <textarea
+                                    v-model="replyText"
+                                    :placeholder="replyPlaceholder"
+                                    class="np-input resize-none"
+                                    rows="2"
+                                ></textarea>
+                                <div class="flex justify-end gap-2 mt-2">
+                                    <button
+                                        @click="replyToId = null; replyText = ''"
+                                        class="np-btn np-btn-ghost px-3 text-xs cursor-pointer"
+                                    >取消</button>
+                                    <button
+                                        @click="submitReply"
+                                        :disabled="replySubmitting || !replyText.trim()"
+                                        class="np-btn np-btn-primary px-3 text-xs cursor-pointer"
+                                    >
+                                        {{ replySubmitting ? '提交中...' : '发表' }}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
