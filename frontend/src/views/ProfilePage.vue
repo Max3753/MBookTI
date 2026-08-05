@@ -42,6 +42,27 @@ const mbtiTypes = ref<any[]>([])
 const saving = ref(false)
 const saveMsg = ref('')
 
+// 「我的主页」状态卡：快捷开关（与编辑弹窗共用 is_profile_public，此处实时同步）
+const quickPublic = ref(true)
+const togglingPublic = ref(false)
+
+async function toggleProfilePublic() {
+    if (togglingPublic.value) return
+    const next = !quickPublic.value
+    togglingPublic.value = true
+    quickPublic.value = next  // 乐观更新，失败回滚
+    try {
+        const res = await updateMyProfile({ is_profile_public: next })
+        profile.value = res.data
+        editProfilePublic.value = next  // 同步编辑弹窗开关
+    } catch (e: any) {
+        quickPublic.value = !next
+        alert(e.response?.data?.detail || '切换失败')
+    } finally {
+        togglingPublic.value = false
+    }
+}
+
 // 头像上传
 const avatarUploading = ref(false)
 const avatarMsg = ref('')
@@ -164,6 +185,7 @@ async function loadProfile() {
         profile.value = res.data
         editUsername.value = res.data.username
         editMbtiId.value = res.data.mbti_type_id
+        quickPublic.value = res.data.is_profile_public ?? true
     } catch (e) {
         error.value = '加载个人资料失败'
     } finally {
@@ -352,7 +374,6 @@ onMounted(async () => {
                     </div>
                     <!-- 操作按钮：移动端换行到下一行 -->
                     <div class="flex gap-2 shrink-0 sm:ml-auto">
-                        <router-link :to="`/users/${profile.id}`" class="np-btn np-btn-ghost px-4">公开主页</router-link>
                         <button @click="openEdit" class="np-btn np-btn-secondary px-4 cursor-pointer">编辑资料</button>
                         <button @click="openPw" class="np-btn np-btn-primary px-4 cursor-pointer">改密码</button>
                     </div>
@@ -365,6 +386,39 @@ onMounted(async () => {
                         <p class="edition-label text-neutral-500 dark:text-neutral-400 mt-1">支持 EPUB / TXT 在线阅读，自动保存阅读进度</p>
                     </div>
                     <router-link to="/reader" class="np-btn np-btn-ghost px-4 shrink-0">打开阅读器</router-link>
+                </div>
+
+                <!-- 我的主页：公开状态卡（状态徽标 + 快捷开关 + 查看入口） -->
+                <div class="mt-6 border-2 border-ink dark:border-paper p-5">
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-3 flex-wrap">
+                                <h2 class="font-serif text-lg font-bold text-ink dark:text-paper">我的主页</h2>
+                                <span class="np-badge shrink-0"
+                                    :class="quickPublic ? 'np-badge-outline' : 'np-badge-editorial'">
+                                    {{ quickPublic ? '主页公开' : '仅自己可见' }}
+                                </span>
+                            </div>
+                            <p class="edition-label text-neutral-500 dark:text-neutral-400 mt-1">
+                                {{ quickPublic
+                                    ? '任何人可查看我的主页 / 书评 / 收藏'
+                                    : '仅自己可见，他人访问将显示「用户不存在」' }}
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-4 shrink-0">
+                            <label class="flex items-center gap-2 cursor-pointer select-none">
+                                <span class="edition-label text-neutral-500 dark:text-neutral-400">公开</span>
+                                <span class="relative inline-flex items-center h-6 w-11 shrink-0 rounded-full transition-colors"
+                                    :class="quickPublic ? 'bg-editorial' : 'bg-neutral-300 dark:bg-neutral-600'">
+                                    <input type="checkbox" :checked="quickPublic" :disabled="togglingPublic"
+                                        @change="toggleProfilePublic" class="sr-only" />
+                                    <span class="inline-block w-4 h-4 bg-paper rounded-full shadow transition-transform"
+                                        :class="quickPublic ? 'translate-x-6' : 'translate-x-1'"></span>
+                                </span>
+                            </label>
+                            <router-link :to="`/users/${profile.id}`" class="np-btn np-btn-ghost px-4 shrink-0">查看我的主页</router-link>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- 统计徽章：报纸数据栏（5 列，与公开主页口径一致） -->
