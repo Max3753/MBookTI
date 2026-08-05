@@ -8,6 +8,10 @@ export interface ReaderSettings {
     theme: 'light' | 'dark' | 'sepia'   // 保留兼容旧存档；实际颜色以 bgColor/fgColor 为准
     bgColor: string   // 阅读背景色（hex）
     fgColor: string   // 阅读文字色（hex）
+    lineHeight: number       // 行距倍数（1.5 紧凑 / 1.8 标准 / 2.0 宽松 / 2.4 舒适）
+    fontFamily: 'default' | 'serif' | 'sans'  // 阅读字体：默认 / 宋体（衬线）/ 黑体（无衬线）
+    marginWidth: 'narrow' | 'standard' | 'wide'  // 页边距：窄 / 标准 / 宽
+    indent: boolean          // 段落首行缩进
 }
 
 export const useReaderStore = defineStore('reader', () => {
@@ -24,6 +28,10 @@ export const useReaderStore = defineStore('reader', () => {
         theme: 'light',
         bgColor: '#ffffff',
         fgColor: '#1f2937',
+        lineHeight: 1.9,
+        fontFamily: 'default',
+        marginWidth: 'standard',
+        indent: true,
     })
 
     /** 唯一入口：换书。销毁旧书 → 换新 → 自动恢复进度 */
@@ -59,8 +67,11 @@ export const useReaderStore = defineStore('reader', () => {
         if (!raw) return
         try {
             const saved = JSON.parse(raw)
-            // 旧存档可能缺 bgColor/fgColor，合并后补默认值
-            Object.assign(settings.value, { bgColor: '#ffffff', fgColor: '#1f2937' }, saved)
+            // 旧存档可能缺新增字段，合并后补默认值（向后兼容）
+            Object.assign(settings.value, {
+                bgColor: '#ffffff', fgColor: '#1f2937',
+                lineHeight: 1.9, fontFamily: 'default', marginWidth: 'standard', indent: true,
+            }, saved)
         } catch {/* 损坏数据静默忽略 */}
     }
 

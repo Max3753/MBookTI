@@ -14,7 +14,7 @@ import {
 import {
     hashFile,
     isFileSystemAccessSupported,
-    pickLocalBook,
+    pickLocalBooks,
     saveFileHandle,
     getFileHandle,
     deleteFileHandle,
@@ -57,6 +57,39 @@ function zoomIn() { zoom.value = Math.min(ZOOM_MAX, zoom.value + ZOOM_STEP); app
 function zoomOut() { zoom.value = Math.max(ZOOM_MIN, zoom.value - ZOOM_STEP); applyZoom() }
 function resetZoom() { zoom.value = 100; applyZoom() }
 
+// ---- 排版设置（字体 / 行距 / 页边距 / 首行缩进）----
+const showTypo = ref(false)
+const FONT_OPTIONS = [
+    { value: 'default', label: '默认' },
+    { value: 'serif', label: '宋体' },
+    { value: 'sans', label: '黑体' },
+] as const
+const LINE_OPTIONS = [
+    { value: 1.5, label: '紧凑' },
+    { value: 1.8, label: '标准' },
+    { value: 2.0, label: '宽松' },
+    { value: 2.4, label: '舒适' },
+] as const
+const MARGIN_OPTIONS = [
+    { value: 'narrow', label: '窄' },
+    { value: 'standard', label: '标准' },
+    { value: 'wide', label: '宽' },
+] as const
+
+// 字体栈 → CSS 变量（TXT 段落渲染在阅读器容器内，靠 .reader-container 规则生效）
+function fontFamilyCss(f: string): string {
+    if (f === 'serif') return "'Songti SC', 'SimSun', 'Noto Serif CJK SC', Georgia, 'Times New Roman', serif"
+    if (f === 'sans') return "'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Helvetica Neue', Arial, sans-serif"
+    return ''
+}
+
+// 页边距 → 容器 padding（EPUB iframe 被压缩出留白；TXT 段落区收缩；PDF canvas 相应变窄）
+function marginPaddingCss(m: string): string {
+    if (m === 'narrow') return '0.5rem 1rem'
+    if (m === 'wide') return '2.5rem 3.5rem'
+    return '1.25rem 2rem'
+}
+
 const { isFullscreen, isSupported: fullscreenSupported, toggle: toggleFullscreen } = useReaderFullscreen(readerRoot)
 
 // 预设背景色板（背景 + 配套文字色）
@@ -94,14 +127,37 @@ watch(isFullscreen, () => {
     }))
 })
 
-// 背景/文字色变更 → 应用到当前书
-watch(() => [store.settings.bgColor, store.settings.fgColor] as const, ([bg, fg]) => {
-    void store.adapter?.setTheme?.(bg, fg)
-})
+// 背景/文字色 + 字号 + 排版参数变更 → 应用到当前书（任意设置途径统一走此 watch 持久化+重排）
+watch(
+    () => [
+        store.settings.fontSize,
+        store.settings.bgColor,
+        store.settings.fgColor,
+        store.settings.lineHeight,
+        store.settings.fontFamily,
+        store.settings.marginWidth,
+        store.settings.indent,
+    ] as const,
+    () => {
+        store.saveSettings()
+        void store.adapter?.setTheme?.(store.settings.bgColor, store.settings.fgColor, {
+            lineHeight: store.settings.lineHeight,
+            fontFamily: store.settings.fontFamily,
+            marginWidth: store.settings.marginWidth,
+            indent: store.settings.indent,
+        })
+        // 行距/边距/字体影响 TXT 分页高度 → 等 DOM 应用新样式后重排，保持当前段落锚点
+        nextTick(() => {
+            void store.adapter?.relayout?.()
+            refreshProgress()
+        })
+    }
+)
 
 onMounted(() => {
     store.loadSettings()   // 恢复持久化的阅读设置
     if (isLoggedIn.value) void loadHistory()
+    window.addEventListener('keydown', onKeydown)
 })
 
 // 离开阅读器时清理内存态：store.adapter 是全局单例，若不清理，
@@ -109,6 +165,11 @@ onMounted(() => {
 // 因为 onMounted 不再重新 renderTo），而不是空态主页；刷新后才会正常。
 // 进度已持久化（localStorage + 云端），下次选同一文件会自动续读，不影响。
 onUnmounted(() => {
+    window.removeEventListener('keydown', onKeydown)
+    if (progressSaveTimer !== null) {
+        window.clearTimeout(progressSaveTimer)
+        progressSaveTimer = null
+    }
     store.setAdapter(null, '')
     currentBookKey.value = ''
 })
@@ -230,7 +291,21 @@ async function openBookFile(file: File, handle?: FileSystemFileHandle) {
 
         await nextTick()                             // 等容器挂载（阅读台在 v-else 分支里）再渲染内容
         if (container.value) await adapter.renderTo(container.value)
-        await adapter.setTheme?.(store.settings.bgColor, store.settings.fgColor)  // 应用当前背景色
+        await adapter.setTheme?.(store.settings.bgColor, store.settings.fgColor, {
+            lineHeight: store.settings.lineHeight,
+            fontFamily: store.settings.fontFamily,
+            marginWidth: store.settings.marginWidth,
+            indent: store.settings.indent,
+        })
+        // EPUB 内部翻页（滑动/链接跳转）不经过 next/prev → 注册回调刷新进度并节流保存
+        adapter.onProgressChange?.(() => {
+            refreshProgress()
+            if (progressSaveTimer !== null) return
+            progressSaveTimer = window.setTimeout(() => {
+                progressSaveTimer = null
+                persistProgress()
+            }, 1000)
+        })
         persistProgress()
         refreshProgress()
     } catch (e: unknown) {
@@ -239,6 +314,9 @@ async function openBookFile(file: File, handle?: FileSystemFileHandle) {
         currentBookKey.value = ''
     }
 }
+
+// EPUB 内部翻页的进度保存节流定时器
+let progressSaveTimer: number | null = null
 
 /** 进度保存：localStorage（本机）+ 云端（登录时，按 book_key upsert） */
 function persistProgress() {
@@ -257,14 +335,19 @@ function persistProgress() {
 }
 
 /** 选书入口：优先 File System Access API（可持久化句柄）；任何失败都回退 <input>，
- *  保证 http://IP 等非安全上下文（无 FS Access）或 API 抛错时仍能选书。 */
+ *  保证 http://IP 等非安全上下文（无 FS Access）或 API 抛错时仍能选书。
+ *  支持多选：打开第一本，其余保存句柄入库（待「书架」迭代展示，同设备可无感续读）。 */
 async function openPicker() {
     error.value = ''
     if (isFileSystemAccessSupported()) {
         try {
-            const picked = await pickLocalBook()
-            if (picked) {
-                await openBookFile(picked.file, picked.handle)
+            const picked = await pickLocalBooks()
+            if (picked?.length) {
+                await openBookFile(picked[0].file, picked[0].handle)
+                for (let i = 1; i < picked.length; i++) {
+                    const h = picked[i].handle
+                    if (h) void saveFileHandle(picked[i].bookKey, h)
+                }
                 return
             }
             // 用户取消 → 不打开 input，保持现状
@@ -280,11 +363,12 @@ async function openPicker() {
 
 async function onFilePicked(event: Event) {
     const input = event.target as HTMLInputElement
-    const file = input.files?.[0]
-    if (!file) return
+    const files = Array.from(input.files ?? [])
+    if (!files.length) return
     input.value = ''                           // 立即重置，允许重复选同一文件
     error.value = ''
-    await openBookFile(file)
+    // input 路径拿不到持久化句柄，多选时只打开第一本（其余仅本次会话可读）
+    await openBookFile(files[0])
 }
 
 async function next() {
@@ -346,6 +430,9 @@ async function jumpTo(item: ToCItem) {
 // 各格式的进度文案：PDF=页码 / TXT=段落数 / EPUB=章节数（从 CFI 解析章节序号）
 const positionText = ref('')
 const progressPercent = ref(0)
+// 当前章节名（EPUB 从 CFI 章节序号近似匹配目录顶层项；TXT/PDF 无章节名）。
+// 在 refreshProgress 中同步更新（翻页/内部翻页都会刷新），不做 computed 避免响应性丢失。
+const chapterLabel = ref('')
 
 function refreshProgress() {
     const adapter = store.adapter
@@ -370,7 +457,13 @@ function refreshProgress() {
         const chapter = match ? Number(match[1]) + 1 : 0
         positionText.value = totalCount > 0 ? `第 ${Math.min(Math.max(chapter, 1), totalCount)} / ${totalCount} 章` : ''
         progressPercent.value = totalCount > 0 ? Math.round(((Math.min(Math.max(chapter, 1), totalCount) - 1) / totalCount) * 100) : 0
+        // 当前章节名：目录顶层项按顺序近似对应 spine 章节
+        const cfiChapter = match ? Number(match[1]) : 0
+        const tops = flatToc.value.filter((e) => e.depth === 0)
+        chapterLabel.value = tops[cfiChapter]?.label ?? ''
+        return
     }
+    chapterLabel.value = ''
     progressPercent.value = Math.max(0, Math.min(100, progressPercent.value))
 }
 
@@ -380,12 +473,40 @@ const FONT_MAX = 28
 
 function changeFontSize(delta: number) {
     store.settings.fontSize = Math.min(FONT_MAX, Math.max(FONT_MIN, store.settings.fontSize + delta))
-    store.saveSettings()
-    // 字号变化影响 TXT 分页高度 → 等 DOM 应用新字号后重排，保持当前段落锚点；EPUB/PDF 无副作用
-    nextTick(() => {
-        void store.adapter?.relayout?.()
-        refreshProgress()
-    })
+    // 持久化 + 重排由 settings watch 统一处理（字号变化影响 TXT 分页高度）
+}
+
+// ---- 翻页快捷键（←/→ / 空格 / PageUp/PageDown）----
+function onKeydown(e: KeyboardEvent) {
+    if (!store.adapter) return
+    const target = e.target as HTMLElement | null
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
+    if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault()
+        void prev()
+    } else if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
+        e.preventDefault()
+        void next()
+    }
+}
+
+// ---- 滑动翻页（仅 TXT：EPUB 由 epubjs 自带手势；PDF 为滚动浏览不启用）----
+let touchStartX = 0
+let touchStartY = 0
+function onReaderTouchStart(e: TouchEvent) {
+    if (store.adapter?.format !== 'txt') return
+    touchStartX = e.changedTouches[0].clientX
+    touchStartY = e.changedTouches[0].clientY
+}
+function onReaderTouchEnd(e: TouchEvent) {
+    if (store.adapter?.format !== 'txt') return
+    const dx = e.changedTouches[0].clientX - touchStartX
+    const dy = e.changedTouches[0].clientY - touchStartY
+    // 横向位移超阈值且明显大于纵向（排除滚动）才翻页
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        if (dx < 0) void next()
+        else void prev()
+    }
 }
 
 // 格式徽标文案
@@ -401,7 +522,7 @@ const formatLabel = computed(() => {
 
 <template>
     <div class="max-w-4xl mx-auto px-4 py-8">
-        <input ref="fileInput" type="file" accept=".txt,.epub,.pdf" class="hidden" @change="onFilePicked" />
+        <input ref="fileInput" type="file" accept=".txt,.epub,.pdf" multiple class="hidden" @change="onFilePicked" />
 
         <!-- 空状态：报纸刊头引导（无书时展示）
              ⚠️ 不用 Transition out-in 包裹：它会让 v-else 阅读台延迟到旧元素离场后才挂载，
@@ -491,7 +612,14 @@ const formatLabel = computed(() => {
                 v-else
                 ref="readerRoot"
                 class="reader-root animate-newsprint-in"
-                :style="{ '--reader-bg': store.settings.bgColor, '--reader-font-size': store.settings.fontSize + 'px' }"
+                :style="{
+                    '--reader-bg': store.settings.bgColor,
+                    '--reader-font-size': store.settings.fontSize + 'px',
+                    '--reader-line-height': String(store.settings.lineHeight),
+                    '--reader-font-family': fontFamilyCss(store.settings.fontFamily),
+                    '--reader-padding': marginPaddingCss(store.settings.marginWidth),
+                    '--reader-indent': store.settings.indent ? '2em' : '0',
+                }"
             >
                 <header class="border-b-4 border-ink dark:border-paper pb-4 mb-4">
                     <div class="flex items-center justify-between edition-label mb-3">
@@ -510,9 +638,12 @@ const formatLabel = computed(() => {
                     </div>
                 </header>
 
-                <!-- 阅读进度：页码/章节 + 进度条 -->
+                <!-- 阅读进度：页码/章节 + 当前章节名 + 进度条 -->
                 <div class="flex items-center gap-3 mb-3">
                     <span class="np-badge np-badge-outline shrink-0">{{ positionText }}</span>
+                    <span v-if="chapterLabel" class="font-serif text-sm text-neutral-600 dark:text-neutral-300 truncate">
+                        {{ chapterLabel }}
+                    </span>
                     <div
                         class="flex-1 h-1.5 bg-neutral-200 dark:bg-neutral-600"
                         role="progressbar"
@@ -528,8 +659,21 @@ const formatLabel = computed(() => {
                 </div>
 
                 <!-- 阅读容器（外框：硬阴影报纸剪贴感，背景跟随用户设置） -->
-                <div class="reader-frame border border-ink dark:border-paper hard-shadow">
-                    <div ref="container" class="reader-container h-[70vh] overflow-hidden"></div>
+                <div class="reader-frame relative border border-ink dark:border-paper hard-shadow">
+                    <div
+                        ref="container"
+                        class="reader-container h-[70vh] overflow-hidden"
+                        @touchstart="onReaderTouchStart"
+                        @touchend="onReaderTouchEnd"
+                    ></div>
+                    <!-- 点击热区翻页（桌面端）：左 1/3 上一页、右 1/3 下一页、中央 1/3 穿透
+                         （pointer-events-none，点击落到 EPUB iframe 内可选中文本）；
+                         移动端用滑动翻页，隐藏热区避免误触 -->
+                    <div v-if="store.adapter" class="absolute inset-0 z-20 hidden sm:flex" aria-hidden="true">
+                        <div class="w-1/3 h-full cursor-w-resize" @click="prev"></div>
+                        <div class="w-1/3 h-full pointer-events-none"></div>
+                        <div class="w-1/3 h-full cursor-e-resize" @click="next"></div>
+                    </div>
                 </div>
 
                 <!-- 工具栏 -->
@@ -594,6 +738,68 @@ const formatLabel = computed(() => {
                                 <input type="color" class="w-9 h-9 p-0 border border-ink/30 cursor-pointer" :value="store.settings.bgColor" @input="onCustomColor" />
                                 <span class="text-xs font-mono text-neutral-500 dark:text-neutral-400">自定义背景</span>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- 排版（字体 / 行距 / 页边距 / 首行缩进） -->
+                    <div class="relative">
+                        <button class="np-btn np-btn-ghost !min-h-[36px] px-3 text-xs" @click="showTypo = !showTypo">排版</button>
+                        <div v-if="showTypo" class="fixed inset-0 z-20" @click="showTypo = false"></div>
+                        <div v-if="showTypo" class="absolute right-0 bottom-full mb-2 z-30 w-64 border border-ink dark:border-paper bg-paper dark:bg-[#201f16] hard-shadow p-4">
+                            <p class="edition-label text-neutral-500 mb-3">排版 · TYPOGRAPHY</p>
+
+                            <!-- 字体 -->
+                            <p class="edition-label text-neutral-400 mb-1.5">字体</p>
+                            <div class="flex gap-1 mb-4">
+                                <button
+                                    v-for="f in FONT_OPTIONS"
+                                    :key="f.value"
+                                    @click="store.settings.fontFamily = f.value"
+                                    class="flex-1 px-2 py-1 text-xs border cursor-pointer transition-colors"
+                                    :class="store.settings.fontFamily === f.value
+                                        ? 'border-editorial bg-paper text-editorial'
+                                        : 'border-ink/20 text-neutral-500 hover:border-ink dark:border-paper/20 dark:text-neutral-300 dark:hover:border-paper'"
+                                >{{ f.label }}</button>
+                            </div>
+
+                            <!-- 行距 -->
+                            <p class="edition-label text-neutral-400 mb-1.5">行距</p>
+                            <div class="flex gap-1 mb-4">
+                                <button
+                                    v-for="lh in LINE_OPTIONS"
+                                    :key="lh.value"
+                                    @click="store.settings.lineHeight = lh.value"
+                                    class="flex-1 px-2 py-1 text-xs border cursor-pointer transition-colors"
+                                    :class="store.settings.lineHeight === lh.value
+                                        ? 'border-editorial bg-paper text-editorial'
+                                        : 'border-ink/20 text-neutral-500 hover:border-ink dark:border-paper/20 dark:text-neutral-300 dark:hover:border-paper'"
+                                >{{ lh.label }}</button>
+                            </div>
+
+                            <!-- 页边距 -->
+                            <p class="edition-label text-neutral-400 mb-1.5">页边距</p>
+                            <div class="flex gap-1 mb-4">
+                                <button
+                                    v-for="m in MARGIN_OPTIONS"
+                                    :key="m.value"
+                                    @click="store.settings.marginWidth = m.value"
+                                    class="flex-1 px-2 py-1 text-xs border cursor-pointer transition-colors"
+                                    :class="store.settings.marginWidth === m.value
+                                        ? 'border-editorial bg-paper text-editorial'
+                                        : 'border-ink/20 text-neutral-500 hover:border-ink dark:border-paper/20 dark:text-neutral-300 dark:hover:border-paper'"
+                                >{{ m.label }}</button>
+                            </div>
+
+                            <!-- 首行缩进 -->
+                            <label class="flex items-center justify-between border border-ink/15 dark:border-paper/20 px-3 py-2.5 cursor-pointer">
+                                <span class="text-xs font-medium text-ink dark:text-paper">首行缩进</span>
+                                <span class="relative inline-flex items-center h-5 w-9 shrink-0 rounded-full transition-colors"
+                                    :class="store.settings.indent ? 'bg-editorial' : 'bg-neutral-300 dark:bg-neutral-600'">
+                                    <input type="checkbox" v-model="store.settings.indent" class="sr-only" />
+                                    <span class="inline-block w-3.5 h-3.5 bg-paper rounded-full shadow transition-transform"
+                                        :class="store.settings.indent ? 'translate-x-[18px]' : 'translate-x-0.5'"></span>
+                                </span>
+                            </label>
                         </div>
                     </div>
 
@@ -667,20 +873,34 @@ const formatLabel = computed(() => {
     background: var(--reader-bg, #fff);
 }
 
+/* 阅读容器：页边距由排版设置控制（EPUB iframe 被压缩出留白 / TXT 段落区收缩） */
+.reader-container {
+    padding: var(--reader-padding, 1.25rem 2rem);
+}
+
 /* TXT 段落排版（adapter 动态生成的 p 元素，需 :deep 穿透）；
-   字体沿用设计系统衬线正文，最大行宽限制成报纸栏宽，便于阅读 */
+   字体/行距/首行缩进跟随排版设置（--reader-* 变量），最大行宽限制成报纸栏宽，
+   翻页时新段落整体淡入（转场动画） */
 .reader-container :deep(p) {
-    font-family: var(--font-body);
+    font-family: var(--reader-font-family, var(--font-body));
     font-size: var(--reader-font-size, 16px);
-    line-height: 1.9;
+    line-height: var(--reader-line-height, 1.9);
+    text-indent: var(--reader-indent, 0);
     max-width: 42rem;
     margin: 0 auto 1.1em;
     padding: 0 1.25rem;
     text-align: justify;
     overflow-wrap: break-word;
+    animation: reader-fade-in 0.25s ease;
 }
 .reader-container :deep(p:last-child) {
     margin-bottom: 0;
+}
+
+/* 翻页转场：TXT 重绘时段落淡入（EPUB 由 epubjs 自带翻页过渡） */
+@keyframes reader-fade-in {
+    from { opacity: 0; transform: translateY(3px); }
+    to { opacity: 1; transform: none; }
 }
 
 /* 目录抽屉滑动动画（报纸侧栏硬切入） */

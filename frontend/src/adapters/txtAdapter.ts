@@ -1,5 +1,12 @@
 import jschardet from 'jschardet'
-import type { IBookAdapter, BookMetadata, ToCItem, ProgressPosition } from './types'
+import type { IBookAdapter, BookMetadata, ToCItem, ProgressPosition, ReaderTypography } from './types'
+
+// 字体栈：与 EPUB 注入的规则一致（TXT 段落渲染在阅读器容器内，靠继承生效）
+const FONT_STACKS: Record<NonNullable<ReaderTypography['fontFamily']>, string | null> = {
+    default: null,
+    serif: "'Songti SC', 'SimSun', 'Noto Serif CJK SC', Georgia, 'Times New Roman', serif",
+    sans: "'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Helvetica Neue', Arial, sans-serif",
+}
 
 // 一页 = 一段连续的段落范围（含两端）。进度仍以「段落索引」持久化，
 // 与旧存档（reader_progress_* 存的数字）完全兼容，无需迁移。
@@ -169,11 +176,16 @@ export function createTxtAdapter(file: File): IBookAdapter {
         renderCurrent()
     }
 
-    // 应用背景/文字色（样式在容器上，renderCurrent 重建内容不影响）
-    function setTheme(bgColor: string, fgColor: string) {
+    // 应用背景/文字色 + 排版（样式在容器上，renderCurrent 重建内容不影响）。
+    // 行距/字体设容器样式由段落继承；缩进与页边距由阅读器 CSS 变量控制（.reader-container 规则）。
+    function setTheme(bgColor: string, fgColor: string, typo?: ReaderTypography) {
         if (!container) return
         container.style.backgroundColor = bgColor
         container.style.color = fgColor
+        if (typo) {
+            container.style.lineHeight = String(typo.lineHeight)
+            container.style.fontFamily = FONT_STACKS[typo.fontFamily] ?? ''
+        }
     }
 
     function destroy() {

@@ -18,6 +18,14 @@ export type BookFormat = 'epub' | 'pdf' | 'txt'
 // 进度位置：EPUB 存 CFI 字符串；PDF 存页码；TXT 存段落索引数字
 export type ProgressPosition = string | number
 
+// 排版参数（字体/行距/边距/缩进），随主题一起注入渲染层
+export interface ReaderTypography {
+    lineHeight: number
+    fontFamily: 'default' | 'serif' | 'sans'
+    marginWidth: 'narrow' | 'standard' | 'wide'
+    indent: boolean
+}
+
 export interface IBookAdapter {
     readonly metadata: BookMetadata
     readonly format: BookFormat
@@ -50,10 +58,17 @@ export interface IBookAdapter {
     relayout?(): void | Promise<void>
 
     /**
-     * 应用阅读背景色/文字色（可选；由阅读器在设置变更或渲染后调用）。
-     * TXT 设容器样式；EPUB 通过 rendition.themes.override 覆盖 iframe 内文档。
+     * 应用阅读背景色/文字色与排版参数（可选；由阅读器在设置变更或渲染后调用）。
+     * TXT 设容器样式；EPUB 通过 rendition.themes.override 覆盖 iframe 内文档；
+     * PDF 为 canvas 渲染，可不实现。
      */
-    setTheme?(bgColor: string, fgColor: string): void | Promise<void>
+    setTheme?(bgColor: string, fgColor: string, typo?: ReaderTypography): void | Promise<void>
+
+    /**
+     * 注册位置变更监听（可选）。EPUB 内部翻页（滑动/链接）不经过 next/prev，
+     * 阅读器借此刷新进度文案；TXT/PDF 翻页均走 next/prev，可省略。
+     */
+    onProgressChange?(listener: () => void): void
 
     /**
      * 设置缩放百分比（可选；PDF 专属，100 = 适配容器宽度）。

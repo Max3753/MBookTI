@@ -103,14 +103,14 @@ export interface PickedBook {
     handle?: FileSystemFileHandle
 }
 
-/** 打开系统文件选择器。优先 File System Access API（返回可持久化句柄）；取消返回 null */
-export async function pickLocalBook(): Promise<PickedBook | null> {
+/** 打开系统文件选择器（支持多选）。优先 File System Access API（返回可持久化句柄）；取消返回 null */
+export async function pickLocalBooks(): Promise<PickedBook[] | null> {
     const w = window as unknown as {
         showOpenFilePicker?: (opts: unknown) => Promise<FileSystemFileHandle[]>
     }
     if (typeof w.showOpenFilePicker === 'function') {
         try {
-            const [handle] = await w.showOpenFilePicker({
+            const handles = await w.showOpenFilePicker({
                 types: [{
                     description: '电子书',
                     accept: {
@@ -120,11 +120,15 @@ export async function pickLocalBook(): Promise<PickedBook | null> {
                         'application/epub+zip': ['.epub'],
                     },
                 }],
-                multiple: false,
+                multiple: true,
             })
-            const file = await handle.getFile()
-            const bookKey = await hashFile(file)
-            return { file, bookKey, handle }
+            const books: PickedBook[] = []
+            for (const handle of handles) {
+                const file = await handle.getFile()
+                const bookKey = await hashFile(file)
+                books.push({ file, bookKey, handle })
+            }
+            return books
         } catch (e) {
             if (e instanceof DOMException && e.name === 'AbortError') return null  // 用户取消
             throw e
