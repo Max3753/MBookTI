@@ -141,8 +141,13 @@ export function createEpubAdapter(input: File | string): IBookAdapter {
     // 改为在 iframe 内容文档内部监听 click：命中 <a> 则放行（epubjs 自己处理跳转），
     // 否则按横向坐标分区翻页。与 TXT 覆盖层规则完全一致：
     //   左 1/3 → 上一页；右 2/3（含中央）→ 下一页；无死区。
-    // 仅桌面端（pointer:fine）启用；移动端 EPUB 走 epubjs 自带滑动手势，避免双击冲突。
+    // 关键细节：
+    //   1. rendition.next()/prev() 走异步队列（q.enqueue），连续快速点击会并发翻页，
+    //      且分区计算在翻页动画中漂移 → 出现前后页来回跳。用 250ms 翻页锁串行化。
+    //   2. 用 mousedown 记录起点 + click 比对位移：拖选文本/滚动后松手不触发翻页。
+    //   3. 仅桌面端（pointer:fine）启用；移动端 EPUB 走 epubjs 自带滑动手势。
     const tapZonedDocs = new WeakSet<Document>()
+    let lastTurnAt = 0
 
     function attachTapZones() {
         if (!window.matchMedia?.('(pointer: fine)').matches) return
@@ -152,18 +157,28 @@ export function createEpubAdapter(input: File | string): IBookAdapter {
             const doc = content?.document as Document | undefined
             if (!doc || tapZonedDocs.has(doc)) continue
             tapZonedDocs.add(doc)
+            // 拖选/滚轮后松手不应翻页：记录按下位置，click 时位移过大则忽略
+            const startPos = { x: 0, y: 0 }
+            doc.addEventListener('mousedown', (e: MouseEvent) => {
+                if ((e.target as HTMLElement | null)?.closest?.('a')) return
+                startPos.x = e.clientX
+                startPos.y = e.clientY
+            })
             doc.addEventListener('click', (e: MouseEvent) => {
                 // 链接放行：epubjs 内部对 iframe 链接有自己的处理（目录/脚注跳转）
                 if ((e.target as HTMLElement | null)?.closest?.('a')) return
+                const now = Date.now()
+                if (now - lastTurnAt < 250) return    // 翻页锁：防连点并发翻页
+                if (Math.abs(e.clientX - startPos.x) + Math.abs(e.clientY - startPos.y) > 8) return  // 拖拽/滚动后松手不翻页
                 const width = doc.documentElement?.clientWidth ?? 0
                 if (!width) return
                 const x = e.clientX
+                lastTurnAt = now
+                e.preventDefault()
                 if (x < width / 3) {
-                    e.preventDefault()
-                    void rendition?.prev()
+                    void rendition?.prev().catch(() => { /* 翻页竞态错误忽略 */ })
                 } else {
-                    e.preventDefault()
-                    void rendition?.next()
+                    void rendition?.next().catch(() => { /* 翻页竞态错误忽略 */ })
                 }
             })
         }

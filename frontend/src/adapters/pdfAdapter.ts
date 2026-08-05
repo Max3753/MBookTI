@@ -56,11 +56,37 @@ export function createPdfAdapter(file: File): IBookAdapter {
         element.style.overflow = 'auto'   // PDF 放大后页面超高/超宽，容器内双向滚动（其余格式为 hidden）
         canvas = document.createElement('canvas')
         canvas.style.display = 'block'
+        canvas.style.cursor = 'pointer'   // 提示可点击翻页
         element.appendChild(canvas)
         if (pdfDoc && pendingPage !== null) {
             if (pendingPage >= 1 && pendingPage <= pdfDoc.numPages) currentPage = pendingPage
             pendingPage = null
         }
+        // 桌面端点击分区翻页（不遮挡滚动条/滚轮，滚动优先；canvas 本身可滚动容器内滚动）：
+        // 左 1/3 → 上一页，右 2/3（含中央）→ 下一页，与 TXT/EPUB 规则一致。
+        // 位移判定：拖选/拖滚动后松手不翻页；250ms 锁防连点并发渲染抖动。
+        const startPos = { x: 0, y: 0 }
+        let lastTurnAt = 0
+        canvas.addEventListener('mousedown', (e: MouseEvent) => {
+            startPos.x = e.clientX
+            startPos.y = e.clientY
+        })
+        canvas.addEventListener('click', (e: MouseEvent) => {
+            const now = Date.now()
+            if (now - lastTurnAt < 250) return
+            if (Math.abs(e.clientX - startPos.x) + Math.abs(e.clientY - startPos.y) > 8) return
+            const c = canvas
+            if (!c) return
+            const rect = c.getBoundingClientRect()
+            const x = e.clientX - rect.left
+            if (x < rect.width / 3) {
+                lastTurnAt = now
+                void prev()
+            } else {
+                lastTurnAt = now
+                void next()
+            }
+        })
         await renderCurrent()
     }
 
@@ -114,6 +140,7 @@ export function createPdfAdapter(file: File): IBookAdapter {
         if (pdfDoc && currentPage < pdfDoc.numPages) {
             currentPage++
             await renderCurrent()
+            progressListener?.()
         }
     }
 
@@ -121,7 +148,14 @@ export function createPdfAdapter(file: File): IBookAdapter {
         if (currentPage > 1) {
             currentPage--
             await renderCurrent()
+            progressListener?.()
         }
+    }
+
+    // 内部翻页（canvas 点击分区翻页）后通知阅读器刷新进度文案
+    let progressListener: (() => void) | null = null
+    function onProgressChange(listener: () => void) {
+        progressListener = listener
     }
 
     // 容器尺寸变化（全屏/窗口 resize）：按新宽度重渲染当前页（保持当前缩放）
@@ -148,6 +182,6 @@ export function createPdfAdapter(file: File): IBookAdapter {
     return {
         metadata, format: 'pdf', load, getToC,
         getProgress, getTotal, setProgress, renderTo,
-        next, prev, relayout, setZoom, destroy,
+        next, prev, relayout, setZoom, onProgressChange, destroy,
     }
 }
