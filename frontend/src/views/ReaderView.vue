@@ -666,10 +666,13 @@ const formatLabel = computed(() => {
                         @touchstart="onReaderTouchStart"
                         @touchend="onReaderTouchEnd"
                     ></div>
-                    <!-- 点击热区翻页（桌面端）：左 1/3 上一页、右 1/3 下一页、中央 1/3 穿透
-                         （pointer-events-none，点击落到 EPUB iframe 内可选中文本）；
+                    <!-- 点击热区翻页（仅 TXT，桌面端）：左 1/3 上一页、右 1/3 下一页、中央 1/3 穿透
+                         （pointer-events-none，可选中文本）；
+                         EPUB 不渲染覆盖层——epubjs iframe 内部已做分区翻页且放行书内链接/目录，
+                         覆盖层会挡在 iframe 上方导致书内链接点不动；
+                         PDF 不渲染覆盖层——需保留滚动条/滚轮操作，覆盖层会拦截滚动；
                          移动端用滑动翻页，隐藏热区避免误触 -->
-                    <div v-if="store.adapter" class="absolute inset-0 z-20 hidden sm:flex" aria-hidden="true">
+                    <div v-if="store.adapter?.format === 'txt'" class="absolute inset-0 z-20 hidden sm:flex" aria-hidden="true">
                         <div class="w-1/3 h-full cursor-w-resize" @click="prev"></div>
                         <div class="w-1/3 h-full pointer-events-none"></div>
                         <div class="w-1/3 h-full cursor-e-resize" @click="next"></div>
