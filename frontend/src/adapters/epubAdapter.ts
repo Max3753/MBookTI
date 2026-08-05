@@ -139,7 +139,8 @@ export function createEpubAdapter(input: File | string): IBookAdapter {
     // 不能像 TXT 那样在阅读器层放覆盖热区：覆盖层会拦截 iframe 内点击，导致
     // 书内目录（TOC 页）/脚注/交叉引用等 <a> 链接全部失效。
     // 改为在 iframe 内容文档内部监听 click：命中 <a> 则放行（epubjs 自己处理跳转），
-    // 否则按横向坐标分区翻页（左 1/3 上一页、右 1/3 下一页、中央 1/3 不响应）。
+    // 否则按横向坐标分区翻页。与 TXT 覆盖层规则完全一致：
+    //   左 1/3 → 上一页；右 2/3（含中央）→ 下一页；无死区。
     // 仅桌面端（pointer:fine）启用；移动端 EPUB 走 epubjs 自带滑动手势，避免双击冲突。
     const tapZonedDocs = new WeakSet<Document>()
 
@@ -160,7 +161,7 @@ export function createEpubAdapter(input: File | string): IBookAdapter {
                 if (x < width / 3) {
                     e.preventDefault()
                     void rendition?.prev()
-                } else if (x > (width * 2) / 3) {
+                } else {
                     e.preventDefault()
                     void rendition?.next()
                 }
