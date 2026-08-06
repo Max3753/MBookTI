@@ -36,6 +36,12 @@ export interface IBookAdapter {
     /** 返回目录树 */
     getToC(): Promise<ToCItem[]>
 
+    /**
+     * 返回当前进度对应的章节名（可选；EPUB 用 spine href 匹配目录顶层项，
+     * 其余格式无章节名返回空串）。
+     */
+    getChapterLabel?(position: ProgressPosition): string | Promise<string>
+
     /** 返回当前进度（EPUB=CFI / PDF=页码 / TXT=段落索引） */
     getProgress(): ProgressPosition
 

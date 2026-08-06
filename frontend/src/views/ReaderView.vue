@@ -459,9 +459,12 @@ function refreshProgress() {
         const chapter = match ? Number(match[1]) / 2 : 0
         positionText.value = totalCount > 0 ? `第 ${Math.min(Math.max(chapter, 1), totalCount)} / ${totalCount} 章` : ''
         progressPercent.value = totalCount > 0 ? Math.round(((Math.min(Math.max(chapter, 1), totalCount) - 1) / totalCount) * 100) : 0
-        // 当前章节名：目录顶层项按顺序近似对应 spine 章节
-        const cfiChapter = match ? Number(match[1]) / 2 : 0
-        chapterLabel.value = tocItems.value[cfiChapter]?.label ?? ''
+        // 当前章节名：EPUB 用 spine href 匹配目录顶层项（spine 条数≠目录项数，
+        // 不能拿章节序号当下标）；TXT/PDF 无章节名。
+        // 异步解析，回调里校验 adapter 未变，避免换书后旧标签覆盖新书。
+        void Promise.resolve(adapter.getChapterLabel?.(pos) ?? '').then((label) => {
+            if (store.adapter === adapter) chapterLabel.value = label
+        })
         return
     }
     chapterLabel.value = ''

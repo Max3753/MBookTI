@@ -40,6 +40,44 @@ export function createEpubAdapter(input: File | string): IBookAdapter {
         return nav.toc as ToCItem[]
     }
 
+    // 章节名解析：不能靠"章节序号当目录数组下标"——spine 条数与目录顶层项数
+    // 往往不相等（如 72 个 spine 段 vs 9 个顶层章节），下标直接越界得到空。
+    // 正确做法：用当前 spine 段的 href 与目录项 href 匹配，归入所属章节。
+    // 匹配规则：spine 段与目录项共享同一"part 基名"（如 part0004_split_001 与
+    // part0004_split_000 都含 part0004），按基名命中目录顶层项取章节名；
+    // 未命中顶层再递归子项取最近子章节名，最后兜底空串。
+    let tocForLabel: ToCItem[] | null = null
+    async function getChapterLabel(position: ProgressPosition): Promise<string> {
+        if (!book || typeof position !== 'string') return ''
+        try {
+            const spineItem = book.spine.get(position)
+            const href = String(spineItem?.href ?? '')
+            if (!href) return ''
+            if (!tocForLabel) tocForLabel = await getToC()
+            const norm = (h?: string) => (h ?? '').split('#')[0].split('?')[0]
+            const base = (h?: string) => (norm(h).match(/part\d+/) || [null])[0]
+            const target = norm(href)
+            const targetBase = base(href)
+            if (!target) return ''
+            // 顶层章节：spine 段与顶层项共享 part 基名即命中（split 段归入所属章节）
+            const findTop = (items: ToCItem[]): string => {
+                for (const it of items) {
+                    const h = norm(it.href)
+                    if (targetBase && base(it.href) === targetBase) return it.label
+                    if (h && (target === h || target.startsWith(h))) return it.label
+                    if (it.subitems) {
+                        const sub = findTop(it.subitems)
+                        if (sub) return sub
+                    }
+                }
+                return ''
+            }
+            return findTop(tocForLabel)
+        } catch {
+            return ''
+        }
+    }
+
     async function renderTo(element: HTMLElement) {
         element.innerHTML = ''      // 换书时清掉旧 stage 残留
         rendition = book.renderTo(element, {
@@ -229,7 +267,7 @@ export function createEpubAdapter(input: File | string): IBookAdapter {
     }
 
     return {
-        metadata, format: 'epub', load, getToC,
+        metadata, format: 'epub', load, getToC, getChapterLabel,
         getProgress, setProgress, renderTo,
         next, prev, setTheme, onProgressChange, getTotal, destroy,
     }
