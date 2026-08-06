@@ -37,6 +37,9 @@ build/
 additions/
 design/
 
+# 自媒体运营文案模板（本地创作素材，不入库）
+文案模板.md
+
 # Docker 部署指南（本地文档，不入库）
 Docker部署指南.md
 
