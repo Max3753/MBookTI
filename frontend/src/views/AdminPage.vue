@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
+import { useMaterialMode } from '../composables/useMaterialMode'
 import {
     publishAnnouncement,
     getAnnouncementList,
@@ -13,6 +14,7 @@ import {
 
 const router = useRouter()
 const { user } = useAuth()
+const { materialMode, toggle: toggleMaterialMode } = useMaterialMode()
 
 // 非管理员直接踢回首页（双保险：路由守卫 + 组件内校验）
 if (!user.value?.is_admin) {
@@ -152,6 +154,22 @@ onMounted(() => {
             </div>
             <h1 class="font-serif text-4xl sm:text-5xl font-black tracking-tighter border-b-4 border-editorial pb-3">管理后台</h1>
         </header>
+
+        <!-- 素材模式开关：仅管理员可见。开启后去除灰度滤镜，配图/封面全彩，便于截图导出自媒体素材 -->
+        <div class="np-card p-4 flex items-center justify-between animate-newsprint-in">
+            <div>
+                <div class="font-serif font-bold text-ink dark:text-paper">素材模式 · MATERIAL MODE</div>
+                <p class="text-xs text-neutral-500 dark:text-neutral-400 mt-1">开启后人格配图与书籍封面恢复全彩（去除灰度滤镜），关闭即还原报纸版式。仅影响当前账号的显示，普通用户不受影响。</p>
+            </div>
+            <button
+                @click="toggleMaterialMode"
+                class="np-btn cursor-pointer shrink-0 !min-h-[36px] px-4"
+                :class="materialMode ? 'np-btn-primary' : 'np-btn-ghost'"
+                :title="materialMode ? '当前开启：配图全彩' : '当前关闭：报纸灰度'"
+            >
+                {{ materialMode ? '✓ 已开启' : '开启' }}
+            </button>
+        </div>
 
         <!-- Tab 切换 -->
         <div class="flex mb-6">

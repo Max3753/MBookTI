@@ -2,12 +2,14 @@
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useTheme } from './composables/useTheme'
 import { useAuth } from './composables/useAuth'
+import { useMaterialMode } from './composables/useMaterialMode'
 import { useNotifications } from './composables/useNotifications'
 import { resolveAssetUrl } from './api/config'
 import { t } from './composables/useI18n'
 
 const { isDark, toggle: toggleTheme } = useTheme()
 const { user, isLoggedIn, logout, refreshUser } = useAuth()
+const { init: initMaterialMode } = useMaterialMode()
 const { unread, refreshUnread } = useNotifications()
 
 // 头像加载失败（如旧 URL 已被服务端删除）时回退为首字母墨印
@@ -22,6 +24,8 @@ onMounted(() => {
     unreadTimer = window.setInterval(refreshUnread, 30000)
     // 刷新服务端最新用户信息（头像等可能在其他设备/会话被修改）
     refreshUser()
+    // 管理员恢复素材模式状态（非管理员自动关闭）
+    initMaterialMode()
 })
 
 onUnmounted(() => {

@@ -104,6 +104,12 @@
     filter: grayscale(1) sepia(0.5);
 }
 
+/* 素材模式（管理员）：去除灰度滤镜，配图/封面恢复全彩，便于截图导出自媒体素材 */
+.material-mode .newsprint-img,
+.material-mode .newsprint-img:hover {
+    filter: none;
+}
+
 /* ---------- Editorial Labels & Metadata ---------- */
 .edition-label {
     @apply font-mono text-xs uppercase tracking-widest;
