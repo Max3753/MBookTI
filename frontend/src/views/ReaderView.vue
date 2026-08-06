@@ -520,18 +520,21 @@ function onReaderTouchEnd(e: TouchEvent) {
 // 双击选词保护：单击翻页延迟 TXT_DBLCLICK_MS 执行，若同位置紧跟第二次点击
 // （浏览器识别为双击，e.detail>=2）则取消挂起的翻页——让位给系统原生文字选取；
 // 位置明显不同的快速连点视为连续翻页，替换挂起任务继续前进。
+// 仅桌面端（pointer:fine）启用：移动端走滑动翻页，触屏的合成 click 会与滑动冲突。
 let txtMouseDown = { x: 0, y: 0 }
 let txtPendingTurn: { timer: number; x: number; y: number; dir: 1 | -1 } | null = null
 const TXT_DBLCLICK_MS = 300      // 与系统双击识别窗口一致
 const TXT_DBLCLICK_RADIUS = 15   // 同位置容差（px）：此范围内二次点击视为双击选词
 
+const txtPointerFine = () => window.matchMedia?.('(pointer: fine)').matches
+
 function onReaderMouseDown(e: MouseEvent) {
-    if (store.adapter?.format !== 'txt') return
+    if (store.adapter?.format !== 'txt' || !txtPointerFine()) return
     txtMouseDown.x = e.clientX
     txtMouseDown.y = e.clientY
 }
 function onReaderClick(e: MouseEvent) {
-    if (store.adapter?.format !== 'txt') return
+    if (store.adapter?.format !== 'txt' || !txtPointerFine()) return
     // 拖选文字/滚动后松手不翻页：位移过大则忽略
     if (Math.abs(e.clientX - txtMouseDown.x) + Math.abs(e.clientY - txtMouseDown.y) > 8) return
     const el = container.value
