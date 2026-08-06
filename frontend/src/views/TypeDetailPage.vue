@@ -227,10 +227,23 @@ function proxyUrl(url: string): string {
                         </span>
                     </div>
                     <p class="edition-label text-neutral-500">{{ item.book.author }}</p>
-                    <p v-if="item.book.genre" class="mt-2 inline-block np-badge np-badge-outline">
-                        {{ item.book.genre }}
+                    <div class="flex flex-wrap items-center gap-2 mt-2">
+                        <span v-if="item.book.genre" class="inline-block np-badge np-badge-outline">
+                            {{ item.book.genre }}
+                        </span>
+                        <!-- 用户评分：有评分才显示（★ 平均分 · N 人评分） -->
+                        <span v-if="item.book.avg_rating" class="inline-flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400">
+                            <span class="text-editorial">★</span>
+                            <span class="font-semibold text-ink dark:text-paper">{{ item.book.avg_rating }}</span>
+                            <span>· {{ item.book.rating_count }} 人评分</span>
+                        </span>
+                    </div>
+                    <!-- 书籍简介：让没读过的人先了解这本书讲什么 -->
+                    <p v-if="item.book.description" class="mt-3 text-sm text-neutral-600 dark:text-neutral-300 leading-relaxed line-clamp-3">
+                        {{ item.book.description }}
                     </p>
                     <div class="mt-4 p-4 bg-paper border-l-4 border-editorial">
+                        <div class="edition-label text-editorial mb-1">推荐理由 · WHY THIS BOOK</div>
                         <p class="text-sm font-serif text-neutral-600 dark:text-neutral-300 leading-relaxed italic text-justify">
                             "{{ item.reasoning }}"
                         </p>

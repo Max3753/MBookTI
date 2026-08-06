@@ -15,9 +15,10 @@ router = APIRouter(
 
 # 已有推荐时再次点击「AI 生成」，随机决定走哪条分支：
 #   - 命中该概率 → 重新调用 AI 生成全新推荐
-#   - 未命中     → 从数据库已有书籍中随机换一批未推荐过的（零 AI 费用、零新增书籍）
+#   - 未命中     → 从数据库已有书籍中按人格偏好换一批未推荐过的（零 AI 费用、零新增书籍）
 # 首次生成（无旧推荐）不受此概率影响，必定调用 AI。
-AI_REGENERATE_PROBABILITY = 0.5
+# 概率取黄金比例 0.618：AI 分支略占优，兼顾内容质量与成本。
+AI_REGENERATE_PROBABILITY = 0.618
 
 
 def _normalize_book(s: str) -> str:
@@ -122,13 +123,23 @@ async def _rotate_from_library(
     session: AsyncSession,
     count: int,
     mbti_type_id: int,
+    mbti_code: str,
     exclude_book_ids: list[int] | None = None,
 ) -> list[dict]:
-    """从数据库已有书籍中随机换一批「该类型未推荐过」的书。
+    """从数据库已有书籍中换一批「该类型未推荐过」的书，并体现 MBTI 人格关联。
 
     零 AI 费用、零新增书籍；只替换推荐关系。
+    关联性策略：优先挑选该类型偏好体裁（MBTI_PROFILES[code].genres）的书，
+    不足时再随机补足；reasoning 文案结合类型特质与书籍简介生成。
     exclude_book_ids：刚被删除的旧推荐书籍 id，换书时排除，避免换到刚展示过的书。
     """
+    from app.services.ai_recommender import MBTI_PROFILES
+
+    profile = MBTI_PROFILES.get(mbti_code.upper(), {})
+    preferred_genres = set(profile.get("genres") or [])
+    traits = profile.get("traits") or []
+    trait_hint = traits[0] if traits else "该类型"
+
     # 已推荐给该类型的书籍 id（避免重复展示）
     recommended_book_ids = (
         await session.execute(
@@ -139,20 +150,45 @@ async def _rotate_from_library(
     # 合并排除：当前已推荐的 + 刚删除的旧推荐（防止换回刚看过的）
     exclude = set(recommended_book_ids) | set(exclude_book_ids or [])
 
-    query = select(Book)
-    if exclude:
-        query = query.where(Book.id.not_in(list(exclude)))
-    all_books = (await session.execute(query)).scalars().all()
+    def _query(genre_filter: bool):
+        query = select(Book)
+        if exclude:
+            query = query.where(Book.id.not_in(list(exclude)))
+        if genre_filter:
+            query = query.where(Book.genre.in_(list(preferred_genres)))
+        return query
+
+    # 第一优先：该类型偏好体裁的书
+    preferred_books = (await session.execute(_query(True))).scalars().all()
+    # 第二优先：其余书（补足数量）
+    fallback_books = (await session.execute(_query(False))).scalars().all()
 
     import random
-    picked = random.sample(all_books, k=min(count, len(all_books))) if all_books else []
+    picked = []
+    if preferred_books:
+        picked = random.sample(preferred_books, k=min(count, len(preferred_books)))
+    if len(picked) < count:
+        # 补足时排除已选中的，避免重复
+        picked_ids = {b.id for b in picked}
+        rest = [b for b in fallback_books if b.id not in picked_ids]
+        picked += random.sample(rest, k=min(count - len(picked), len(rest)))
+
+    def _reasoning(book: Book) -> str:
+        """按是否命中偏好体裁生成带人格关联的推荐文案。"""
+        desc = (book.description or "").strip()
+        snippet = desc[:40] + ("…" if len(desc) > 40 else "")
+        if book.genre in preferred_genres:
+            base = f"这本书属于「{book.genre}」类，正中 {mbti_code} 对「{trait_hint}」的偏好。"
+        else:
+            base = f"为你精选的{book.genre or '好书'}，值得一读。"
+        return f"{base}{snippet}" if snippet else base
 
     saved = []
     for book in picked:
         rec = Recommendation(
             mbti_type_id=mbti_type_id,
             book_id=book.id,
-            reasoning=f"为你随机挑选的 {book.genre or '好书'}，换换口味。",
+            reasoning=_reasoning(book),
             relevance_score=5,
             is_ai_generated=False,
         )
@@ -195,7 +231,7 @@ async def ai_generate(
     else:
         old_book_ids = await _delete_existing_recommendations(session, mbti_type.id)
         saved = await _rotate_from_library(
-            session, request.count, mbti_type.id, exclude_book_ids=old_book_ids
+            session, request.count, mbti_type.id, request.mbti_code, exclude_book_ids=old_book_ids
         )
         # 兜底：库里可选书不足时，随机换书可能为空/偏少，转 AI 补足
         if len(saved) < request.count:
@@ -225,8 +261,29 @@ async def get_recommendations(mbti_code: str, session: AsyncSession = Depends(ge
     )
     rows = result.all()
 
+    # 一次性批量聚合这批书的用户评分（平均分保留 1 位小数，无评分返回 None）
+    from sqlalchemy import func as sa_func
+    from app.models import BookRating
+    book_ids = [book.id for _, book in rows]
+    rating_map: dict[int, tuple] = {}
+    if book_ids:
+        agg_rows = (await session.execute(
+            select(
+                BookRating.book_id,
+                sa_func.avg(BookRating.rating),
+                sa_func.count(BookRating.id),
+            )
+            .where(BookRating.book_id.in_(book_ids))
+            .group_by(BookRating.book_id)
+        )).all()
+        rating_map = {
+            bid: (round(float(avg), 1) if avg is not None else None, cnt or 0)
+            for bid, avg, cnt in agg_rows
+        }
+
     data = []
     for rec, book in rows:
+        avg_rating, rating_count = rating_map.get(book.id, (None, 0))
         data.append({
             "id": rec.id,
             "reasoning": rec.reasoning,
@@ -241,6 +298,8 @@ async def get_recommendations(mbti_code: str, session: AsyncSession = Depends(ge
                 "cover_url": book.cover_url,
                 "description": book.description,
                 "genre": book.genre,
+                "avg_rating": avg_rating,
+                "rating_count": rating_count,
             }
         })
 
