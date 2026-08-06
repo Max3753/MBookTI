@@ -232,8 +232,9 @@ function recordProgressText(item: ReadingRecordItem): string {
         if (typeof pos === 'number') {
             current = item.format === 'txt' ? pos + 1 : Math.min(Math.floor(pos) + 1, total)
         } else if (item.format === 'epub') {
+            // epubjs 的 CFI 章节数字 = (spinePos+1)*2（偶数节点序号），章节号 = 数字/2
             const match = /epubcfi\(\/\d+\/(\d+)/.exec(String(pos))
-            current = match ? Math.min(Number(match[1]) + 1, total) : 0
+            current = match ? Math.min(Number(match[1]) / 2, total) : 0
         }
     } catch { /* 损坏数据按已阅读处理 */ }
     if (current <= 0) return '已阅读'
@@ -452,15 +453,15 @@ function refreshProgress() {
         positionText.value = totalCount > 0 ? `第 ${Math.min(current + 1, totalCount)} / ${totalCount} 段` : ''
         progressPercent.value = totalCount > 0 ? Math.round((Math.min(current, totalCount) / totalCount) * 100) : 0
     } else {
-        // EPUB：epubjs 的 CFI 形如 epubcfi(/6/<章节序号>[id]!/...)，解析序号换算当前章
+        // EPUB：epubjs 的 CFI 形如 epubcfi(/6/<偶数节点序号>[id]!/...)，章节数字 = (spinePos+1)*2，
+        // 章节号 = 数字/2（spinePos 从 0 起，章节从 1 起，故 spinePos+1 = 数字/2）
         const match = /epubcfi\(\/\d+\/(\d+)/.exec(String(pos))
-        const chapter = match ? Number(match[1]) + 1 : 0
+        const chapter = match ? Number(match[1]) / 2 : 0
         positionText.value = totalCount > 0 ? `第 ${Math.min(Math.max(chapter, 1), totalCount)} / ${totalCount} 章` : ''
         progressPercent.value = totalCount > 0 ? Math.round(((Math.min(Math.max(chapter, 1), totalCount) - 1) / totalCount) * 100) : 0
         // 当前章节名：目录顶层项按顺序近似对应 spine 章节
-        const cfiChapter = match ? Number(match[1]) : 0
-        const tops = flatToc.value.filter((e) => e.depth === 0)
-        chapterLabel.value = tops[cfiChapter]?.label ?? ''
+        const cfiChapter = match ? Number(match[1]) / 2 : 0
+        chapterLabel.value = tocItems.value[cfiChapter]?.label ?? ''
         return
     }
     chapterLabel.value = ''

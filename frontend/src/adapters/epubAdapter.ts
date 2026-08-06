@@ -195,11 +195,20 @@ export function createEpubAdapter(input: File | string): IBookAdapter {
                 // 链接放行：epubjs 内部对 iframe 链接有自己的处理（目录/脚注跳转）
                 if ((e.target as HTMLElement | null)?.closest?.('a')) return
                 if (Math.abs(e.clientX - startPos.x) + Math.abs(e.clientY - startPos.y) > 8) return  // 拖拽/滚动后松手不翻页
-                const width = doc.documentElement?.clientWidth ?? 0
-                if (!width) return
-                const x = e.clientX
+                // 分区基准：可见视口，而非整列内容宽。
+                // epubjs paginated 把整章排成 CSS 多列，iframe 视口宽 = 整列内容宽（如 11172），
+                // 而可见窗口是外层 .epub-container（宽 798，overflow:hidden，epubjs 靠横向滚动翻页）。
+                // e.clientX 相对 iframe 视口（0~11172），必须先减去容器已滚动量 scrollLeft，
+                // 得到"可见区内坐标"，再按容器可见宽分左 1/3（上）/ 右 2/3（下）。
+                // 若直接用 documentElement.clientWidth 或 window.innerWidth（都是整列宽 11172）判分区，
+                // 任意可见点击都 < width/3 → 永远触发上一页（此前"回跳/翻页无效"的根因）。
+                const container = document.querySelector('.epub-container') as HTMLElement | null
+                const visibleW = container?.clientWidth ?? doc.body?.clientWidth ?? 0
+                if (!visibleW) return
+                const scrollLeft = container?.scrollLeft ?? 0
+                const x = e.clientX - scrollLeft
                 e.preventDefault()
-                if (x < width / 3) {
+                if (x < visibleW / 3) {
                     void prev()
                 } else {
                     void next()
