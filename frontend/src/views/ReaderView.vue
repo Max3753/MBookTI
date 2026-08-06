@@ -513,6 +513,51 @@ function onReaderTouchEnd(e: TouchEvent) {
     }
 }
 
+// ---- 桌面端点击分区翻页（仅 TXT）----
+// 不用覆盖层热区：覆盖层会拦截点击，导致无法选中/复制正文文字。
+// 改为在阅读容器上监听：mousedown 记起点，click 时位移小（非拖选）才按横向坐标
+// 分区翻页（左 1/3 上一页、右 2/3 含中央下一页），与 EPUB iframe 内规则一致。
+// 双击选词保护：单击翻页延迟 TXT_DBLCLICK_MS 执行，若同位置紧跟第二次点击
+// （浏览器识别为双击，e.detail>=2）则取消挂起的翻页——让位给系统原生文字选取；
+// 位置明显不同的快速连点视为连续翻页，替换挂起任务继续前进。
+let txtMouseDown = { x: 0, y: 0 }
+let txtPendingTurn: { timer: number; x: number; y: number; dir: 1 | -1 } | null = null
+const TXT_DBLCLICK_MS = 300      // 与系统双击识别窗口一致
+const TXT_DBLCLICK_RADIUS = 15   // 同位置容差（px）：此范围内二次点击视为双击选词
+
+function onReaderMouseDown(e: MouseEvent) {
+    if (store.adapter?.format !== 'txt') return
+    txtMouseDown.x = e.clientX
+    txtMouseDown.y = e.clientY
+}
+function onReaderClick(e: MouseEvent) {
+    if (store.adapter?.format !== 'txt') return
+    // 拖选文字/滚动后松手不翻页：位移过大则忽略
+    if (Math.abs(e.clientX - txtMouseDown.x) + Math.abs(e.clientY - txtMouseDown.y) > 8) return
+    const el = container.value
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const dir: 1 | -1 = x < rect.width / 3 ? -1 : 1
+    // 同位置双击（含三击）＝选词意图：取消挂起的翻页，交给系统选中文字
+    if (e.detail >= 2 && txtPendingTurn
+        && Math.abs(e.clientX - txtPendingTurn.x) + Math.abs(e.clientY - txtPendingTurn.y) <= TXT_DBLCLICK_RADIUS) {
+        clearTimeout(txtPendingTurn.timer)
+        txtPendingTurn = null
+        return
+    }
+    // 连续翻页：新点击替换旧挂起任务（保持前进节奏）
+    if (txtPendingTurn) clearTimeout(txtPendingTurn.timer)
+    txtPendingTurn = {
+        x: e.clientX, y: e.clientY, dir,
+        timer: window.setTimeout(() => {
+            txtPendingTurn = null
+            if (dir > 0) void next()
+            else void prev()
+        }, TXT_DBLCLICK_MS),
+    }
+}
+
 // 格式徽标文案
 const formatLabel = computed(() => {
     switch (store.adapter?.format) {
@@ -662,24 +707,22 @@ const formatLabel = computed(() => {
                     </div>
                 </div>
 
-                <!-- 阅读容器（外框：硬阴影报纸剪贴感，背景跟随用户设置） -->
+                    <!-- 阅读容器（外框：硬阴影报纸剪贴感，背景跟随用户设置） -->
                 <div class="reader-frame relative border border-ink dark:border-paper hard-shadow">
                     <div
                         ref="container"
                         class="reader-container h-[70vh] overflow-hidden"
                         @touchstart="onReaderTouchStart"
                         @touchend="onReaderTouchEnd"
+                        @mousedown="onReaderMouseDown"
+                        @click="onReaderClick"
                     ></div>
-                    <!-- 点击分区翻页（仅 TXT，桌面端）：左 1/3 上一页、右 2/3（含中央）下一页、无死区，
-                         与 EPUB 的 iframe 内监听规则完全一致；
-                         EPUB 不渲染覆盖层——epubjs iframe 内部已做分区翻页且放行书内链接/目录，
+                    <!-- 点击分区翻页说明：
+                         TXT 在容器上按坐标分区监听（非覆盖层，避免挡住文字选取/拖选）；
+                         EPUB 由 epubjs iframe 内部处理分区翻页且放行书内链接/目录，
                          覆盖层会挡在 iframe 上方导致书内链接点不动；
-                         PDF 不渲染覆盖层——需保留滚动条/滚轮操作，覆盖层会拦截滚动；
-                         移动端用滑动翻页，隐藏热区避免误触 -->
-                    <div v-if="store.adapter?.format === 'txt'" class="absolute inset-0 z-20 hidden sm:flex" aria-hidden="true">
-                        <div class="w-1/3 h-full cursor-w-resize" @click="prev"></div>
-                        <div class="w-2/3 h-full cursor-e-resize" @click="next"></div>
-                    </div>
+                         PDF 保留滚动条/滚轮操作，滚动浏览不启用点击分区；
+                         移动端用滑动翻页，坐标分区不参与 -->
                 </div>
 
                 <!-- 工具栏 -->
