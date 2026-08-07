@@ -15,6 +15,7 @@ const recommendations = ref<any[]>([])
 const loading = ref(true)
 const generating = ref(false)
 const error = ref('')
+const notice = ref('')
 
 onMounted(async () => {
     try {
@@ -39,10 +40,15 @@ async function handleGenerate() {
     }
     generating.value = true
     error.value = ''
+    notice.value = ''
     try {
         // AI 生成（后端入库）；生成成功后重新拉取完整推荐列表，
         // 保证数据形状与 getRecommendations 一致（含 book.id/cover_url 等）
-        await aiGenerate(code)
+        const genRes = await aiGenerate(code)
+        // degraded=True：AI 服务不可用，本次书单全部来自书库（评分全 5 分）
+        if (genRes?.degraded) {
+            notice.value = genRes.message || t.generate_degraded
+        }
         const recRes = await getRecommendations(code)
         recommendations.value = recRes.data?.items || []
     } catch (e: any) {
@@ -181,6 +187,12 @@ function proxyUrl(url: string): string {
         <div v-if="error" class="border border-editorial bg-paper text-editorial text-sm px-4 py-3 mb-6 flex items-center gap-3">
             <span class="np-badge np-badge-editorial leading-none">号外</span>
             <span>{{ error }}</span>
+        </div>
+
+        <!-- 降级提示：AI 服务不可用，书单全部来自书库（评分全 5 分） -->
+        <div v-if="notice" class="border border-ink/20 bg-paper text-neutral-600 dark:text-neutral-300 text-sm px-4 py-3 mb-6 flex items-center gap-3">
+            <span class="np-badge np-badge-outline leading-none">提示</span>
+            <span>{{ notice }}</span>
         </div>
 
         <!-- 推荐列表：书评条目 -->

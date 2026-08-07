@@ -7,6 +7,8 @@ class ApiResponse(BaseModel, Generic[T]):
     """统一响应"""
     data: T
     message: str = "success"
+    # 降级标记：AI 服务不可用等降级路径置 True，供前端提示用户
+    degraded: bool = False
     
 class ApiListResponse(BaseModel, Generic[T]):
     """列表响应"""

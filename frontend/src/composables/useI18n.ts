@@ -12,6 +12,7 @@ const t: Record<string, string> = {
     ai_generate: '✨ AI 生成推荐',
     generating: 'AI 生成中...',
     generate_failed: '生成失败，请稍后重试',
+    generate_degraded: 'AI 服务暂不可用，本次推荐来自书库已有书籍',
     no_recommend: '暂无推荐',
     no_recommend_desc: '点击上方按钮，让 AI 为你生成推荐书单',
     comments_title: '评论',
