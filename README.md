@@ -150,6 +150,24 @@ uv run python -m app.main
 
 开发模式（`DEBUG=true`）会开放 `/docs`（Swagger UI）便于调试。
 
+> **数据库建表（本地开发必读）**
+>
+> Docker 部署会在容器启动时自动建表（见 `backend/entrypoint.sh`），**本地开发不会自动建表**。
+> 首次拉取代码或代码新增/变更表结构后，需手动执行对应的幂等建表脚本
+> （`create_all` 只创建缺失表，重复执行安全，已存在的表自动跳过）：
+>
+> ```bash
+> cd backend
+> uv run python scripts/create_password_reset_tokens.py    # 忘记密码 Token
+> uv run python scripts/create_notification_tables.py      # 通知系统
+> uv run python scripts/create_reading_record_tables.py    # 阅读记录
+> uv run python scripts/create_social_tables.py            # 书评评分、关注关系（含 users 加列）
+> uv run python scripts/create_book_relevance.py           # 书籍 × MBTI 相关度评分缓存
+> ```
+>
+> 便捷做法：直接全部执行一遍（均幂等，不会重复建表）。
+> 开发中如遇接口 500 且报错与表/列相关，先检查是否漏跑上述脚本。
+
 #### 2. 配置并启动前端
 
 ```bash
@@ -216,6 +234,7 @@ Docker MySQL 是空库，无用户数据。用导入脚本迁移本地数据，�
 - **安全**：JWT 密钥必须强随机；密码使用 bcrypt（cost=12）；登录/注册/忘记密码均有速率限制
 - **代码规范**：后端通过 `py_compile` + LSP 校验，前端通过 `vue-tsc` 类型检查后方可构建
 - **提交规范**：`type(scope): 中文描述`，如 `fix(backend): 修复xxx`、`feat(frontend): 新增xxx`
+- **表结构变更**：新增模型/改列时，必须在 `backend/scripts/` 下提供幂等建表脚本（仿 `create_social_tables.py` 范式：`create_all` + 必要时 `ALTER`），并加入 `backend/entrypoint.sh` 执行列表；本地开发需手动跑脚本（见上方「数据库建表」说明）
 
 ## License
 

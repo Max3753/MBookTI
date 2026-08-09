@@ -3,7 +3,7 @@ from sqlalchemy import select, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import MbtiType, Book, Recommendation, User, Comment
+from app.models import MbtiType, Book, Recommendation, User, Comment, BookRelevance
 from app.schemas import ApiResponse, AIGenerateRequest
 from app.auth.deps import get_current_user
 from app.services.douban import search_cover
@@ -102,6 +102,65 @@ async def _upsert_book(session: AsyncSession, book_data: dict, existing_books: l
     await session.flush()
     existing_books.append(book)
     return book, True
+
+
+def _parse_relevance_score(value) -> int | None:
+    """清洗 AI 返回的 relevance_score：只接受 0-10 整数。
+
+    AI 可能返回 float / 字符串（如 "8"、"8.5"、None），统一收敛为 0-10 的整数；
+    缺失或非法时返回 None，由调用方走兜底分（不丢弃整本书）。
+    """
+    if value is None:
+        return None
+    try:
+        score = int(float(value))
+    except (TypeError, ValueError):
+        return None
+    return score if 0 <= score <= 10 else None
+
+
+async def _get_relevance_cache(
+    session: AsyncSession,
+    book_ids: list[int],
+    mbti_type_id: int,
+) -> dict[int, int]:
+    """批量读取 book_relevance 缓存：(book_id -> relevance_score)。"""
+    if not book_ids:
+        return {}
+    rows = (await session.execute(
+        select(BookRelevance.book_id, BookRelevance.relevance_score).where(
+            BookRelevance.book_id.in_(book_ids),
+            BookRelevance.mbti_type_id == mbti_type_id,
+        )
+    )).all()
+    return {book_id: score for book_id, score in rows}
+
+
+async def _cache_relevance_score(
+    session: AsyncSession,
+    book_id: int,
+    mbti_type_id: int,
+    score: int,
+) -> None:
+    """把 AI 首评分数写入 book_relevance 缓存；已有记录则保留首个评分（跨批次恒定）。"""
+    existing = (await session.execute(
+        select(BookRelevance.id).where(
+            BookRelevance.book_id == book_id,
+            BookRelevance.mbti_type_id == mbti_type_id,
+        )
+    )).scalar_one_or_none()
+    if existing is None:
+        session.add(BookRelevance(
+            book_id=book_id, mbti_type_id=mbti_type_id, relevance_score=score
+        ))
+
+
+def _fallback_relevance_score(book: Book, preferred_genres: set[str]) -> int:
+    """无 AI 评分也无缓存的兜底分：命中偏好体裁给 7 分，否则 5 分。
+
+    替代原硬编码 5：让库内书也有区分度，避免整批全 5 分的观感。
+    """
+    return 7 if (book.genre or "") in preferred_genres else 5
 
 
 async def _ai_generate_candidates(
@@ -272,12 +331,17 @@ async def _rotate_from_library(
         picked += random.sample(rest, k=min(count - len(picked), len(rest)))
 
     saved = []
+    # 相关度分：复用 book_relevance 已缓存评分；无缓存按体裁偏好兜底（命中偏好 7 分，否则 5 分）
+    cached = await _get_relevance_cache(session, [b.id for b in picked], mbti_type_id)
     for book in picked:
+        score = cached.get(book.id)
+        if score is None:
+            score = _fallback_relevance_score(book, preferred_genres)
         rec = Recommendation(
             mbti_type_id=mbti_type_id,
             book_id=book.id,
             reasoning=_template_reasoning(mbti_code, book, preferred_genres, trait_hint),
-            relevance_score=5,
+            relevance_score=score,
             is_ai_generated=False,
         )
         session.add(rec)
@@ -332,7 +396,7 @@ async def ai_generate(
         return ApiResponse(data=saved, message="AI 服务暂不可用，已从书库为你挑选推荐", degraded=True)
 
     # 4. 逐本独立决定来源：61.8% 取 AI 新书候选，38.2% 从库内已有池随机挑
-    saved = []          # 内部条目：{"book": Book 对象, "is_ai": bool}
+    saved = []          # 内部条目：{"book": Book 对象, "is_ai": bool, "ai_score": int | None}
     used_book_ids = set(old_book_ids)
     ai_iter = iter(ai_candidates)
 
@@ -349,7 +413,11 @@ async def ai_generate(
                 else:
                     # created=True：AI 生成的新对象；created=False：命中库中已有（归库内来源）
                     used_book_ids.add(book.id)
-                    saved.append({"book": book, "is_ai": created})
+                    saved.append({
+                        "book": book,
+                        "is_ai": created,
+                        "ai_score": _parse_relevance_score(book_data.get("relevance_score")),
+                    })
                     continue
 
         # 位次 B：库内已有来源（38.2% / AI 候选不可用时的回退）
@@ -357,7 +425,7 @@ async def ai_generate(
         if pool:
             book = random.choice(pool)
             used_book_ids.add(book.id)
-            saved.append({"book": book, "is_ai": False})
+            saved.append({"book": book, "is_ai": False, "ai_score": None})
             continue
 
         # 位次 C：库内耗尽 → 用剩余 AI 候选补足（候选也耗尽则书单变短）
@@ -367,7 +435,11 @@ async def ai_generate(
             book, created = await _upsert_book(session, book_data, existing_books)
             if book.id not in used_book_ids:
                 used_book_ids.add(book.id)
-                saved.append({"book": book, "is_ai": created})
+                saved.append({
+                    "book": book,
+                    "is_ai": created,
+                    "ai_score": _parse_relevance_score(book_data.get("relevance_score")),
+                })
 
     # 5. 书单确认后，所有书（AI 新书 + 库内书）的推荐词一次独立调用统一生成
     if saved:
@@ -387,15 +459,35 @@ async def ai_generate(
                 )
 
     # 6. 入库推荐关系（每本书一条 Recommendation，供展示/评论/点赞引用）
-    for item in saved:
-        rec = Recommendation(
-            mbti_type_id=mbti_type.id,
-            book_id=item["book"].id,
-            reasoning=item["reasoning"],
-            relevance_score=8 if item["is_ai"] else 5,
-            is_ai_generated=item["is_ai"],
+    # 相关度评分决策链：
+    #   - AI 候选带分 → 使用该分，并写入 book_relevance 缓存（首个评分永久保留 → 跨批次恒定）
+    #   - 库内来源 → 复用已缓存评分；无缓存 → 体裁偏好兜底（命中偏好体裁 7 分，否则 5 分）
+    if saved:
+        from app.services.ai_recommender import MBTI_PROFILES
+        profile = MBTI_PROFILES.get(request.mbti_code.upper(), {})
+        preferred_genres = set(profile.get("genres") or [])
+        cached = await _get_relevance_cache(
+            session,
+            [item["book"].id for item in saved if item["ai_score"] is None],
+            mbti_type.id,
         )
-        session.add(rec)
+        for item in saved:
+            book_id = item["book"].id
+            if item["ai_score"] is not None:
+                score = item["ai_score"]
+                await _cache_relevance_score(session, book_id, mbti_type.id, score)
+            else:
+                score = cached.get(book_id)
+                if score is None:
+                    score = _fallback_relevance_score(item["book"], preferred_genres)
+            rec = Recommendation(
+                mbti_type_id=mbti_type.id,
+                book_id=book_id,
+                reasoning=item["reasoning"],
+                relevance_score=score,
+                is_ai_generated=item["is_ai"],
+            )
+            session.add(rec)
 
     # 响应：只暴露 book(title/author) + reasoning
     data = [

@@ -79,6 +79,7 @@ class AIRecommender:
             '      "title": "书名",\n'
             '      "author": "作者",\n'
             '      "description": "内容简介（50-100字）",\n'
+            f'      "relevance_score": "该书与 {mbti_code} 类型的相关度评分（0-10 的整数，10 表示极度契合）",\n'
         )
         if with_reasoning:
             book_fields += (

@@ -13,3 +13,4 @@ from app.models.password_reset_token import PasswordResetToken
 from app.models.reading_record import ReadingRecord
 from app.models.book_rating import BookRating
 from app.models.user_follow import UserFollow
+from app.models.book_relevance import BookRelevance
