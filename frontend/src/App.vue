@@ -167,7 +167,8 @@ const today = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: '
     <main class="max-w-screen-xl mx-auto px-4 sm:px-6 py-8">
       <router-view v-slot="{ Component }">
         <Transition name="fade" mode="out-in">
-          <component :is="Component" :key="$route.fullPath" />
+          <!-- 以 path 为 key：仅路径变化重建组件。query 变化（如搜索防抖同步 URL）不重建，避免每次输入都触发 onMounted 重复搜索 -->
+          <component :is="Component" :key="$route.path" />
         </Transition>
       </router-view>
     </main>
