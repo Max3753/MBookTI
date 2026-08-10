@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, update, delete
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -90,6 +91,24 @@ async def _upsert_book(session: AsyncSession, book_data: dict, existing_books: l
                 book.cover_url = cover_url
         return book, False
 
+    # 内存快照未命中：插入前再查一次库兜底（title+author 精确匹配）。
+    # 防两类漏网：① 快照之后其他请求刚入库的同名同作者书；② 并发请求各自基于过期快照双写。
+    db_book = (
+        await session.execute(
+            select(Book).where(
+                Book.title == book_data["title"],
+                Book.author == book_data["author"],
+            )
+        )
+    ).scalars().first()
+    if db_book:
+        if not db_book.cover_url:
+            cover_url = await search_cover(book_data["title"], book_data["author"])
+            if cover_url:
+                db_book.cover_url = cover_url
+        existing_books.append(db_book)
+        return db_book, False
+
     cover_url = await search_cover(book_data["title"], book_data["author"])
     book = Book(
         title=book_data["title"],
@@ -99,7 +118,25 @@ async def _upsert_book(session: AsyncSession, book_data: dict, existing_books: l
         cover_url=cover_url,
     )
     session.add(book)
-    await session.flush()
+    try:
+        # 嵌套事务（savepoint）：flush 触发 UNIQUE(title, author) 冲突时
+        # 只回滚本次插入，不影响外层事务（外层已删除旧推荐，不能整段回滚）
+        async with session.begin_nested():
+            await session.flush()
+    except IntegrityError:
+        # 并发竞态漏网：另一请求刚插入同 (title, author) → 回查复用，不重复入库
+        book = (
+            await session.execute(
+                select(Book).where(
+                    Book.title == book_data["title"],
+                    Book.author == book_data["author"],
+                )
+            )
+        ).scalars().first()
+        if book is None:
+            raise
+        existing_books.append(book)
+        return book, False
     existing_books.append(book)
     return book, True
 
