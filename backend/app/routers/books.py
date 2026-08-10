@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
+import re
 
 from app.database import get_db
 from app.models import Book, Recommendation, MbtiType, Comment, User, UserBookFavorite, BookRating
@@ -20,6 +21,19 @@ router = APIRouter(
     tags=["书目"]
 )
 
+
+def _book_dedup_key(title: str) -> str:
+    """搜索去重键：提取「书名主体」。
+
+    同一本书在库里可能以多种形态存在（AI 重复生成/多次导入）：
+      - 作者全称 vs 简称：『小王子』安托万·德·圣-埃克苏佩里 / 圣埃克苏佩里
+      - 副标题/版本差异：『三体』/『三体：全集』、『失控』/『失控：全人类的最终命运和结局』
+    故去重键 = 去掉书名号/空白/标点 + 截断冒号后的副标题，只保留书名主体。
+    （DB 的 UNIQUE(title, author) 只能防字符串完全一致，防不了上述变体，故搜索层按主体去重）
+    """
+    s = re.sub(r"[\s《》·\-—,，.。\"'“”]+", "", title or "")
+    return re.split(r"[:：]", s)[0]
+
 # 注意：/search 必须声明在 /{book_id} 之前，否则会被 int 路径参数路由吞掉
 @router.get("/search", response_model=ApiListResponse[BookResponse])
 async def search_books(
@@ -28,7 +42,12 @@ async def search_books(
     page_size: int = 20,
     session: AsyncSession = Depends(get_db),
 ):
-    """站内书籍搜索：q 模糊匹配书名/作者（LIKE），命中 ISBN 精确匹配；分页返回。"""
+    """站内书籍搜索：q 模糊匹配书名/作者（LIKE），命中 ISBN 精确匹配；分页返回。
+
+    去重策略：books 量小（几十~几百条），全量取出匹配后按「书名主体」在 Python 层去重
+    （保留 id 最小的一条），再手动分页。SQL 层 GROUP BY (title, author) 无法识别
+    作者全称/简称、副标题版本等变体，正是之前搜索结果重复的根因。
+    """
     keyword = (q or "").strip()
     if not keyword:
         return ApiListResponse(data=[], total=0, message="请输入搜索关键词")
@@ -40,7 +59,6 @@ async def search_books(
 
     # 模糊匹配书名/作者（前导通配符不走索引，books 量小全表扫可接受）
     like_pattern = f"%{keyword}%"
-    from sqlalchemy import or_
     conditions = [
         Book.title.like(like_pattern),
         Book.author.like(like_pattern),
@@ -48,21 +66,28 @@ async def search_books(
     # ISBN 精确匹配（走唯一索引）
     conditions.append(Book.isbn == keyword)
 
-    total = (
-        await session.execute(select(func.count(Book.id)).where(or_(*conditions)))
-    ).scalar()
-
+    # 取全部匹配（books 量小；去重后手动分页，保证 total 与 data 一致）
     result = await session.execute(
         select(Book)
         .where(or_(*conditions))
         .order_by(Book.id.asc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
     )
-    books = result.scalars().all()
+    matched = result.scalars().all()
+
+    # Python 层按书名主体去重：同一本书只保留 id 最小的一条
+    seen: dict[str, Book] = {}
+    for b in matched:
+        key = _book_dedup_key(b.title)
+        if key not in seen:
+            seen[key] = b
+
+    deduped = list(seen.values())
+    total = len(deduped)
+    start = (page - 1) * page_size
+    books = deduped[start:start + page_size]
     return ApiListResponse(
         data=[BookResponse.model_validate(b) for b in books],
-        total=total or 0,
+        total=total,
     )
 
 @router.get("/{book_id}", response_model=ApiResponse[BookResponse])
