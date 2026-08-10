@@ -55,6 +55,14 @@ export async function getBookDetail(bookId: number) {
     return res.data
 }
 
+// 站内书籍搜索：q 模糊匹配书名/作者，ISBN 精确匹配；返回 ApiListResponse[BookResponse]
+export async function searchBooks(q: string, page = 1, pageSize = 20) {
+    const res = await api.get('/books/search', {
+        params: { q, page, page_size: pageSize },
+    })
+    return res.data
+}
+
 // 书籍评分接口
 export async function rateBook(bookId: number, rating: number) {
     const res = await api.post(`/books/${bookId}/rating`, { rating })

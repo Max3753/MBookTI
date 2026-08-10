@@ -6,6 +6,7 @@ from app.database import get_db
 from app.models import Book, Recommendation, MbtiType, Comment, User, UserBookFavorite, BookRating
 from app.schemas import (
     ApiResponse,
+    ApiListResponse,
     BookResponse,
     BookDetailResponse,
     RecommendedTypeInfo,
@@ -18,6 +19,51 @@ router = APIRouter(
     prefix="/api/v1/books",
     tags=["书目"]
 )
+
+# 注意：/search 必须声明在 /{book_id} 之前，否则会被 int 路径参数路由吞掉
+@router.get("/search", response_model=ApiListResponse[BookResponse])
+async def search_books(
+    q: str,
+    page: int = 1,
+    page_size: int = 20,
+    session: AsyncSession = Depends(get_db),
+):
+    """站内书籍搜索：q 模糊匹配书名/作者（LIKE），命中 ISBN 精确匹配；分页返回。"""
+    keyword = (q or "").strip()
+    if not keyword:
+        return ApiListResponse(data=[], total=0, message="请输入搜索关键词")
+
+    if page < 1:
+        page = 1
+    if page_size < 1 or page_size > 50:
+        page_size = 20
+
+    # 模糊匹配书名/作者（前导通配符不走索引，books 量小全表扫可接受）
+    like_pattern = f"%{keyword}%"
+    from sqlalchemy import or_
+    conditions = [
+        Book.title.like(like_pattern),
+        Book.author.like(like_pattern),
+    ]
+    # ISBN 精确匹配（走唯一索引）
+    conditions.append(Book.isbn == keyword)
+
+    total = (
+        await session.execute(select(func.count(Book.id)).where(or_(*conditions)))
+    ).scalar()
+
+    result = await session.execute(
+        select(Book)
+        .where(or_(*conditions))
+        .order_by(Book.id.asc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    books = result.scalars().all()
+    return ApiListResponse(
+        data=[BookResponse.model_validate(b) for b in books],
+        total=total or 0,
+    )
 
 @router.get("/{book_id}", response_model=ApiResponse[BookResponse])
 async def get_book(book_id: int, session: AsyncSession = Depends(get_db)):
