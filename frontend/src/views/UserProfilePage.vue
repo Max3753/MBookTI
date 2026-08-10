@@ -11,6 +11,7 @@ import {
 } from '../api'
 import apiConfig, { resolveAssetUrl } from '../api/config'
 import { useAuth } from '../composables/useAuth'
+import BookCard from '../components/BookCard.vue'
 
 interface UserStats {
     comment_count: number
@@ -387,16 +388,7 @@ onMounted(async () => {
                         <p class="edition-label text-neutral-400 dark:text-neutral-500 mt-3">这位读者还没有收藏任何书籍</p>
                     </div>
                     <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                        <router-link v-for="b in favorites" :key="b.id" :to="`/books/${b.id}`"
-                            class="np-card np-card-hover p-3 block">
-                            <div class="w-full h-32 border border-ink dark:border-paper overflow-hidden bg-neutral-100 dark:bg-neutral-800 mb-2">
-                                <img v-if="b.cover_url" :src="proxyUrl(b.cover_url)" :alt="b.title"
-                                    class="w-full h-full object-cover newsprint-img" />
-                                <div v-else class="w-full h-full halftone"></div>
-                            </div>
-                            <div class="text-sm font-medium font-serif truncate text-ink dark:text-paper">{{ b.title }}</div>
-                            <div class="edition-label text-neutral-400 dark:text-neutral-500 mt-0.5 truncate">{{ b.author }}</div>
-                        </router-link>
+                        <BookCard v-for="b in favorites" :key="b.id" :book="b" />
                     </div>
                 </div>
 

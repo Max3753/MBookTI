@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useTheme } from './composables/useTheme'
 import { useAuth } from './composables/useAuth'
 import { useMaterialMode } from './composables/useMaterialMode'
 import { useNotifications } from './composables/useNotifications'
 import { resolveAssetUrl } from './api/config'
 import { t } from './composables/useI18n'
+
+const route = useRoute()
+const router = useRouter()
 
 const { isDark, toggle: toggleTheme } = useTheme()
 const { user, isLoggedIn, logout, refreshUser } = useAuth()
@@ -15,6 +19,19 @@ const { unread, refreshUnread } = useNotifications()
 // 头像加载失败（如旧 URL 已被服务端删除）时回退为首字母墨印
 const avatarError = ref(false)
 watch(() => user.value?.avatar_url, () => { avatarError.value = false })
+
+// 站内搜索：导航栏搜索框（回车或提交跳转 /search?q=关键词）
+const searchKeyword = ref('')
+function submitSearch() {
+    const q = searchKeyword.value.trim()
+    if (!q) return
+    router.push({ path: '/search', query: { q } })
+}
+
+// 返回首页时自动清空搜索框内容（避免关键词残留影响下次搜索）
+watch(() => route.path, (path) => {
+    if (path === '/') searchKeyword.value = ''
+})
 
 // 通知未读数（铃铛红点，轻量轮询）
 let unreadTimer: number | null = null
@@ -50,13 +67,32 @@ const today = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: '
         </div>
 
         <!-- 报头标题 -->
-        <div class="py-6 text-center">
+        <div class="py-6 text-center relative">
           <router-link to="/" class="inline-block group">
             <h1 class="font-serif font-black text-5xl sm:text-6xl lg:text-7xl leading-[0.9] tracking-tighter group-hover:text-editorial transition-colors duration-200">
               {{ t.title }}
             </h1>
             <p class="mt-2 font-serif italic text-neutral-500 dark:text-neutral-400 text-sm sm:text-base">{{ t.subtitle }}</p>
           </router-link>
+
+          <!-- 站内搜索框：桌面端置于报头右侧（报纸副栏位置，替代导航条中部）；/search 结果页自带搜索框，此处隐藏避免重复 -->
+          <form
+            v-if="route.path !== '/search'"
+            class="hidden md:flex items-center gap-2 absolute right-0 top-1/2 -translate-y-1/2 border-b border-ink/40 dark:border-paper/40 focus-within:border-editorial transition-colors duration-200"
+            @submit.prevent="submitSearch"
+          >
+            <input
+              v-model="searchKeyword"
+              type="search"
+              placeholder="搜书 / 作者 / ISBN"
+              class="w-44 lg:w-56 bg-transparent py-1 text-sm text-ink dark:text-paper placeholder:text-neutral-400 dark:placeholder:text-neutral-500 outline-none"
+            />
+            <button type="submit" class="p-1 text-ink dark:text-paper hover:text-editorial transition-colors cursor-pointer" title="搜索">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 10.5a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z"/>
+              </svg>
+            </button>
+          </form>
         </div>
 
         <!-- 导航栏 -->
@@ -66,6 +102,14 @@ const today = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: '
               <router-link to="/" class="edition-label text-ink dark:text-paper hover:text-editorial transition-colors duration-200">首页</router-link>
               <router-link v-if="user?.is_admin" to="/admin" class="edition-label text-ink dark:text-paper hover:text-editorial transition-colors duration-200">管理</router-link>
             </div>
+
+            <!-- 移动端搜索入口（桌面搜索框位于报头右侧；/search 页本身已有搜索框，隐藏） -->
+            <router-link
+              v-if="route.path !== '/search'"
+              to="/search"
+              class="md:hidden edition-label text-ink dark:text-paper hover:text-editorial transition-colors duration-200"
+              title="搜索"
+            >搜索</router-link>
 
             <div class="flex items-center gap-2">
               <!-- 通知铃铛 -->
