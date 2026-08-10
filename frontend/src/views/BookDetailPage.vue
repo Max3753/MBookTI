@@ -337,7 +337,7 @@ async function reloadBook() {
                         v-if="book.cover_url"
                         :src="proxyUrl(book.cover_url)"
                         :alt="book.title"
-                        class="w-28 h-36 object-cover newsprint-img border border-ink/10"
+                        class="w-28 h-36 object-cover border border-ink/10"
                     >
                     <div
                         v-else
