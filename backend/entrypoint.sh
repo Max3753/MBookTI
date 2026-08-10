@@ -33,6 +33,7 @@ python scripts/create_notification_tables.py
 python scripts/create_reading_record_tables.py
 python scripts/create_social_tables.py
 python scripts/create_book_relevance.py
+python scripts/add_book_title_author_unique.py
 
 echo "==> 启动后端 ..."
 exec uvicorn app.main:app --host 0.0.0.0 --port 8000 
