@@ -12,6 +12,7 @@ import {
 import apiConfig, { resolveAssetUrl } from '../api/config'
 import { useAuth } from '../composables/useAuth'
 import BookCard from '../components/BookCard.vue'
+import type { BookSummary } from '../types/book'
 
 interface UserStats {
     comment_count: number
@@ -46,13 +47,6 @@ interface UserComment {
     created_at: string
 }
 
-interface FavoriteBook {
-    id: number
-    title: string
-    author: string
-    cover_url: string | null
-}
-
 interface FollowUser {
     id: number
     username: string
@@ -79,7 +73,7 @@ const comments = ref<UserComment[]>([])
 const commentsLoading = ref(false)
 
 // 收藏
-const favorites = ref<FavoriteBook[]>([])
+const favorites = ref<BookSummary[]>([])
 const favoritesLoading = ref(false)
 
 // 粉丝 / 关注

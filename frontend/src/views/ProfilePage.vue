@@ -14,6 +14,7 @@ import apiConfig, { resolveAssetUrl } from '../api/config'
 import { useAuth } from '../composables/useAuth'
 import { getMbtiTypes } from '../api'
 import BookCard from '../components/BookCard.vue'
+import type { BookSummary } from '../types/book'
 
 const router = useRouter()
 const { logout, updateUser } = useAuth()
@@ -31,7 +32,7 @@ const commentsLoading = ref(false)
 const deletingId = ref<number | null>(null)
 
 // 收藏
-const favorites = ref<any[]>([])
+const favorites = ref<BookSummary[]>([])
 const favoritesLoading = ref(false)
 
 // 编辑资料
