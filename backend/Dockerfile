@@ -2,8 +2,9 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# 安装系统依赖(bcrypt 编译需要)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# 安装系统依赖(bcrypt 编译需要) —— 换国内 apt 源（服务器连不上 deb.debian.org 会超时）
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
